@@ -1,0 +1,14 @@
+[Unit]
+Description=Farejador image updater (verifies the signature, switches, rolls back if unhealthy)
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/farejador/repo/deploy/update.sh
+TimeoutStartSec=900
+Nice=10
+# The script makes only outbound requests and talks to Docker; keep the rest of the host out of reach.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true

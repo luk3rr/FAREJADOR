@@ -1,0 +1,59 @@
+# Production stack for the server (Lightsail). There is NO published port: the only way in is the
+# Cloudflare Tunnel, which the VPS opens from the inside. The image is chosen by the updater through
+# /opt/farejador/image.env (always a digest, never a movable tag).
+#
+#   docker compose --env-file /opt/farejador/image.env -f docker-compose.server.yml up -d
+name: farejador
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-hardening: &hardening
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  logging: *logging
+  networks: [internal]
+
+services:
+  farejador:
+    <<: *hardening
+    image: ${FAREJADOR_IMAGE:?set FAREJADOR_IMAGE (written by deploy/update.sh into /opt/farejador/image.env)}
+    container_name: farejador
+    env_file: /opt/farejador/secrets/farejador.env
+    environment:
+      FAREJADOR_MODE: webhook
+      FAREJADOR_PORT: "8080"
+    mem_limit: 1g
+    cpus: 1.5
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    volumes:
+      - farejador-data:/data
+      - /opt/farejador/secrets/github_app.pem:/run/secrets/github_app.pem:ro
+    healthcheck:
+      test: ["CMD", "farejador", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  cloudflared:
+    <<: *hardening
+    image: cloudflare/cloudflared:2026.11.1@sha256:e613aadbc2d9511785d2e67a86b0c8ac18dd63a3f9af0d06faf04cbfdcb35f2d
+    container_name: cloudflared
+    command: tunnel --no-autoupdate run
+    env_file: /opt/farejador/secrets/cloudflared.env
+    mem_limit: 256m
+    depends_on:
+      - farejador
+
+networks:
+  internal: {}
+
+volumes:
+  farejador-data:

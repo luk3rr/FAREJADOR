@@ -39,3 +39,7 @@ htmlcov/
 # Local secrets mounted into containers
 secrets/
 .env.smoke
+
+# Local-only: deployment runbook and the deploy intent (infrastructure details stay off the public repo)
+docs/deploy/
+.aidlc/261121-secure-aws-deploy/
