@@ -10,11 +10,18 @@ from pathlib import Path
 from tests.api_env import api_client, seed
 
 from farejador.api.routes import (
+    DayCount,
+    DurationStats,
+    FindingDestinations,
     FindingOut,
+    ModelRow,
     ReviewDetail,
     ReviewSummary,
+    StatsOut,
+    StatsTotals,
     StatusOut,
     StepOut,
+    TokenStats,
     ToolResultOut,
 )
 
@@ -26,6 +33,7 @@ def test_the_documented_routes_are_the_real_ones() -> None:
     assert documented == {
         "/api/reviews",
         "/api/reviews/{id}",
+        "/api/stats",
         "/api/status",
         "/api/openapi.json",
     }
@@ -54,7 +62,10 @@ async def test_the_documented_parameters_match_the_openapi_schema(tmp_path: Path
 
 
 def test_every_field_of_the_responses_is_documented() -> None:
-    models = [ReviewSummary, ReviewDetail, StepOut, ToolResultOut, FindingOut, StatusOut]
+    models = [
+        ReviewSummary, ReviewDetail, StepOut, ToolResultOut, FindingOut, StatusOut,
+        StatsOut, StatsTotals, DurationStats, TokenStats, DayCount, FindingDestinations, ModelRow,
+    ]  # fmt: skip
     for model in models:
         for field in model.model_fields:
             assert f'"{field}"' in DOC, f"{model.__name__}.{field} is not in docs/api.md"

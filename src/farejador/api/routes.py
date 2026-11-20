@@ -13,12 +13,13 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Query, Request, Response
 from fastapi import Path as PathParam
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -31,6 +32,9 @@ from farejador.trace.store import TraceUnavailable, open_readonly
 logger = logging.getLogger(__name__)
 
 MAX_LIMIT = 50
+STATS_DEFAULT_DAYS = 30
+STATS_MAX_DAYS = 365
+STATS_CACHE = "public, max-age=60"
 DEFAULT_LIMIT = 20
 REPO_PATTERN = r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$"
 SUCCESS_CACHE = "public, max-age=30"
@@ -152,6 +156,58 @@ class StatusOut(_Out):
     reviews: int
 
 
+class StatsTotals(_Out):
+    reviews: int
+    complete: int
+    partial: int
+    failed: int
+    failure_rate: float
+
+
+class DurationStats(_Out):
+    median: float | None
+    p95: float | None
+
+
+class TokenStats(_Out):
+    mean: float | None
+    median: float | None
+
+
+class DayCount(_Out):
+    day: str
+    reviews: int
+
+
+class FindingDestinations(_Out):
+    inline: int
+    summary: int
+    dropped: int
+
+
+class ModelRow(_Out):
+    model: str
+    prompt_version: str
+    reviews: int
+    failed: int
+    mean_tokens: float | None
+    median_duration_s: float | None
+    findings_per_review: float
+
+
+class StatsOut(_Out):
+    days: int
+    since: str
+    until: str
+    capped: bool
+    totals: StatsTotals
+    duration_s: DurationStats
+    tokens: TokenStats
+    by_day: list[DayCount]
+    findings: FindingDestinations
+    by_model: list[ModelRow]
+
+
 class ErrorBody(_Out):
     error: str
 
@@ -169,7 +225,12 @@ def _error(status: int, error: str, **extra: Any) -> JSONResponse:
     return JsonResponse({"error": error, **extra}, status_code=status)
 
 
-def create_api(trace_path: Path | str, *, retention_days: int = 30) -> FastAPI:
+def create_api(
+    trace_path: Path | str,
+    *,
+    retention_days: int = 30,
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> FastAPI:
     """Build the API app; it opens the trace read-only for each request."""
     api = FastAPI(
         title="Farejador trace API",
@@ -226,7 +287,8 @@ def create_api(trace_path: Path | str, *, retention_days: int = 30) -> FastAPI:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         ok = 200 <= response.status_code < 300
-        response.headers["Cache-Control"] = SUCCESS_CACHE if ok else ERROR_CACHE
+        if "cache-control" not in response.headers:  # a route may ask for its own policy
+            response.headers["Cache-Control"] = SUCCESS_CACHE if ok else ERROR_CACHE
         return response
 
     # -- routes ------------------------------------------------------------
@@ -287,6 +349,20 @@ def create_api(trace_path: Path | str, *, retention_days: int = 30) -> FastAPI:
         if detail is None:  # missing, private and unknown look exactly the same
             raise StarletteHTTPException(404)
         return detail
+
+    @api.head("/stats", include_in_schema=False)
+    @api.get("/stats", response_model=StatsOut, summary="Aggregates of the last N days")
+    def get_stats(
+        response: Response,
+        days: Annotated[int, Query(ge=1, le=STATS_MAX_DAYS)] = STATS_DEFAULT_DAYS,
+    ) -> dict[str, Any]:
+        conn = connect()
+        try:
+            result = queries.stats(conn, now=clock(), days=days)
+        finally:
+            conn.close()
+        response.headers["Cache-Control"] = STATS_CACHE
+        return result
 
     @api.head("/status", include_in_schema=False)
     @api.get("/status", response_model=StatusOut, summary="Whether the trace is available")

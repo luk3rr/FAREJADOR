@@ -40,6 +40,7 @@ from farejador.state.store import StateStore
 from farejador.trace.recorder import NullRecorder, Recorder, TraceRecorder
 from farejador.trace.retention import retention_loop
 from farejador.trace.store import TraceStore, TraceUnavailable
+from farejador.web import install_web
 from farejador.workspace import Workspace
 
 logger = logging.getLogger(__name__)
@@ -216,6 +217,7 @@ async def build_runtime(
             "/api",
             create_api(settings.trace_path, retention_days=settings.trace_retention_days),
         )
+        install_web(webhook_app)
     logger.info(
         "farejador ready",
         extra={"mode": settings.mode.value, "model": settings.model, "bot": bot_login},

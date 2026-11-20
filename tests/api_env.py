@@ -4,10 +4,10 @@
 
 """A trace database with public, private and unknown runs, and a client for the API."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -45,6 +45,11 @@ def make_run(
     error: tuple[str, str] | None = None,
     steps: int = 2,
     content: str = "conteúdo",
+    model: str = "test/model",
+    prompt_version: str = "2026-11-21.2",
+    duration_s: float = 3.0,
+    tokens: int | None = None,
+    findings: tuple[int, int, int] = (1, 1, 1),
 ) -> int:
     run_id = store.begin_run(
         trigger_key=key,
@@ -53,8 +58,8 @@ def make_run(
         pr_number=pr,
         head_sha="a" * 40,
         repo_public=public,
-        model="test/model",
-        prompt_version="2026-11-21.2",
+        model=model,
+        prompt_version=prompt_version,
         app_version="0.1.0",
         budgets={"max_steps": 15, "max_tokens": 200000, "max_seconds": 300, "max_files": 40},
     )
@@ -73,20 +78,25 @@ def make_run(
             tool_calls=[{"id": f"c{index}", "name": "read_file", "arguments": '{"path": "a.py"}'}],
             tool_results=[ToolResult(f"c{index}", "read_file", 0.01, f"corpo {content}")],
         )
-    store.add_finding(run_id, finding(problem=f"problema {content}"))
-    store.add_finding(
-        run_id,
-        finding(disposition=Disposition.SUMMARY, reason="line_not_added", problem="resumo"),
-    )
-    store.add_finding(
-        run_id, finding(disposition=Disposition.DROPPED, reason="duplicate", problem="dup")
-    )
+    inline, summary, dropped = findings
+    for number in range(inline):
+        store.add_finding(run_id, finding(problem=f"problema {content} {number}"))
+    for number in range(summary):
+        store.add_finding(
+            run_id,
+            finding(disposition=Disposition.SUMMARY, reason="line_not_added", problem=f"r{number}"),
+        )
+    for number in range(dropped):
+        store.add_finding(
+            run_id,
+            finding(disposition=Disposition.DROPPED, reason="duplicate", problem=f"d{number}"),
+        )
     store.finish_run(
         run_id,
         outcome=outcome,
         steps=steps,
-        tokens=100 * steps,
-        duration_s=3.0,
+        tokens=100 * steps if tokens is None else tokens,
+        duration_s=duration_s,
         error_category=error[0] if error else None,
         error_message=error[1] if error else None,
     )
@@ -137,8 +147,18 @@ def seed(tmp_path: Path, clock: Clock | None = None) -> Seeded:
 
 
 @asynccontextmanager
-async def api_client(path: Path, *, retention_days: int = 30) -> AsyncIterator[httpx.AsyncClient]:
-    transport = httpx.ASGITransport(app=create_api(path, retention_days=retention_days))
+async def api_client(
+    path: Path,
+    *,
+    retention_days: int = 30,
+    clock: Callable[[], datetime] | None = None,
+) -> AsyncIterator[httpx.AsyncClient]:
+    api = (
+        create_api(path, retention_days=retention_days)
+        if clock is None
+        else create_api(path, retention_days=retention_days, clock=clock)
+    )
+    transport = httpx.ASGITransport(app=api)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
 

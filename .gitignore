@@ -45,3 +45,10 @@ docs/deploy/
 .aidlc/261121-secure-aws-deploy/
 tmp.txt
 .aidlc/261121-review-trace-api/
+.aidlc/261121-review-dashboard/
+
+# Dashboard: compiled output and npm install
+web/node_modules/
+web/dist/
+web/.test-build/
+src/farejador/web/static/

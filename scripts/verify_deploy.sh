@@ -17,7 +17,6 @@ set -uo pipefail
 HOOKS_URL="${FAREJADOR_HOOKS_URL:-https://hooks.luk3rr.com}"
 API_URL="${FAREJADOR_API_URL:-https://farejador.luk3rr.com}"  # "none" skips the API checks
 APEX_URL="${FAREJADOR_APEX_URL:-https://luk3rr.com}"
-DASH_URL="${FAREJADOR_DASH_URL:-}"
 CURL="${FAREJADOR_CURL:-curl}"
 DOCKER="${FAREJADOR_DOCKER:-docker}"
 CURL_TIMEOUT=10
@@ -83,11 +82,6 @@ check_external() {
     expect_code "POST /webhook from a non-GitHub address is blocked by the WAF" POST "${HOOKS_URL}/webhook" 403
     expect_code "POST on another path is blocked" POST "${HOOKS_URL}/anything" 403 404
     check_api
-    if [ -n "$DASH_URL" ]; then
-        expect_code "dashboard asks for login (Cloudflare Access)" GET "${DASH_URL}/" 302 401 403
-    else
-        skip "dashboard check (set FAREJADOR_DASH_URL when delivery 3 exists)"
-    fi
 
     if [ -z "$server_ip" ]; then
         skip "port scan (pass the server IP as the second argument)"
@@ -121,7 +115,25 @@ check_api() {
     expect_code "the webhook path is not reachable on the API host" POST "${API_URL}/webhook" 403 404
     expect_code "the webhook path is not readable on the API host" GET "${API_URL}/webhook" 403 404
     expect_code "the health path is not public on the API host" GET "${API_URL}/healthz" 403 404
-    expect_code "anything outside /api/ is blocked" GET "${API_URL}/docs" 403 404
+    expect_code "anything outside the panel and /api/ is blocked" GET "${API_URL}/docs" 403 404
+    check_panel
+}
+
+check_panel() {
+    echo "== The dashboard (${API_URL})"
+    expect_code "the dashboard page answers" GET "${API_URL}/" 200
+    expect_body "the page is the Farejador dashboard" "${API_URL}/" 'Farejador'
+    expect_code "the compiled script answers" GET "${API_URL}/assets/main.js" 200
+    local headers
+    headers="$("$CURL" -s -D - -o /dev/null --max-time "$CURL_TIMEOUT" "${API_URL}/" 2>/dev/null || true)"
+    headers="$(printf '%s' "$headers" | tr 'A-Z' 'a-z')"
+    if [[ "$headers" == *"content-security-policy:"*"default-src 'none'"* ]]; then
+        pass "the page carries the strict content security policy"
+    else
+        fail "the page does not carry the strict content security policy"
+    fi
+    expect_code "a write on the page is refused" POST "${API_URL}/" 403 405
+    expect_code "a path traversal under /assets/ is not served" GET "${API_URL}/assets/..%2f..%2fetc/passwd" 400 403 404
 }
 
 check_server() {

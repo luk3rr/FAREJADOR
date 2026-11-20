@@ -14,11 +14,13 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import math
 import re
 import sqlite3
+import statistics
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from farejador.trace.store import format_time
@@ -239,3 +241,134 @@ def get_run(conn: sqlite3.Connection, run_id: int) -> dict[str, Any] | None:
 def count_public(conn: sqlite3.Connection) -> int:
     sql = f"SELECT COUNT(*) FROM trace_run r WHERE {PUBLIC}"  # noqa: S608
     return int(conn.execute(sql).fetchone()[0])
+
+
+# -- aggregates for the dashboard overview (FR-9, ADR-4) ----------------------------------------
+
+STATS_ROW_CAP = 50_000
+
+_STATS_COLUMNS = """
+    r.outcome, r.started_at, r.model, r.prompt_version, r.duration_s, r.tokens, r.finished_at,
+    (SELECT COUNT(*) FROM trace_finding f WHERE f.run_id = r.id AND f.disposition = 'inline')
+        AS findings_inline,
+    (SELECT COUNT(*) FROM trace_finding f WHERE f.run_id = r.id AND f.disposition = 'summary')
+        AS findings_summary,
+    (SELECT COUNT(*) FROM trace_finding f WHERE f.run_id = r.id AND f.disposition = 'dropped')
+        AS findings_dropped
+"""
+
+
+def _percentile(sorted_values: list[float], fraction: float) -> float | None:
+    """Nearest-rank percentile of an already sorted list; ``None`` when it is empty."""
+    if not sorted_values:
+        return None
+    rank = max(math.ceil(fraction * len(sorted_values)), 1)
+    return round(sorted_values[rank - 1], 3)
+
+
+def _median(values: list[float]) -> float | None:
+    return round(statistics.median(values), 3) if values else None
+
+
+def _mean(values: list[float]) -> float | None:
+    return round(statistics.fmean(values), 3) if values else None
+
+
+def period_start(now: datetime, days: int) -> datetime:
+    """Midnight UTC of the first day of a window of ``days`` calendar days ending today."""
+    first = now.date() - timedelta(days=days - 1)
+    return datetime(first.year, first.month, first.day, tzinfo=now.tzinfo)
+
+
+def stats(conn: sqlite3.Connection, *, now: datetime, days: int) -> dict[str, Any]:
+    """Everything the overview shows for the last ``days`` days, from public repositories only.
+
+    One pass over the runs of the period (at most ``STATS_ROW_CAP``); the medians and the 95th
+    percentile come from sorted lists in Python because SQLite has no percentile function.
+    """
+    since = period_start(now, days)
+    sql = (
+        f"SELECT {_STATS_COLUMNS} FROM trace_run r "  # noqa: S608
+        f"WHERE {PUBLIC} AND r.started_at >= ? AND r.started_at <= ? ORDER BY r.id LIMIT ?"
+    )
+    rows = conn.execute(sql, (format_time(since), format_time(now), STATS_ROW_CAP + 1)).fetchall()
+    capped = len(rows) > STATS_ROW_CAP
+    rows = rows[:STATS_ROW_CAP]
+
+    outcomes = {"complete": 0, "partial": 0, "failed": 0}
+    per_day: dict[str, int] = {}
+    findings = {"inline": 0, "summary": 0, "dropped": 0}
+    durations: list[float] = []
+    tokens: list[float] = []
+    groups: dict[tuple[str, str], dict[str, Any]] = {}
+
+    for row in rows:
+        outcomes[public_outcome(row["outcome"])] += 1
+        day = row["started_at"][:10]
+        per_day[day] = per_day.get(day, 0) + 1
+        run_findings = (row["findings_inline"], row["findings_summary"], row["findings_dropped"])
+        findings["inline"] += run_findings[0]
+        findings["summary"] += run_findings[1]
+        findings["dropped"] += run_findings[2]
+        finished = row["finished_at"] is not None
+        if finished and row["duration_s"] is not None:
+            durations.append(float(row["duration_s"]))
+        if finished:
+            tokens.append(float(row["tokens"]))
+        group = groups.setdefault(
+            (row["model"], row["prompt_version"]),
+            {"reviews": 0, "failed": 0, "tokens": [], "durations": [], "findings": 0},
+        )
+        group["reviews"] += 1
+        group["failed"] += 1 if public_outcome(row["outcome"]) == "failed" else 0
+        group["findings"] += sum(run_findings)
+        if finished:
+            group["tokens"].append(float(row["tokens"]))
+            if row["duration_s"] is not None:
+                group["durations"].append(float(row["duration_s"]))
+
+    total = sum(outcomes.values())
+    first_day: date = since.date()
+    by_day = [
+        {"day": (first_day + timedelta(days=offset)).isoformat(), "reviews": 0}
+        for offset in range((now.date() - first_day).days + 1)
+    ]
+    for entry in by_day:
+        entry["reviews"] = per_day.get(str(entry["day"]), 0)
+
+    by_model = [
+        {
+            "model": model,
+            "prompt_version": prompt_version,
+            "reviews": group["reviews"],
+            "failed": group["failed"],
+            "mean_tokens": _mean(group["tokens"]),
+            "median_duration_s": _median(group["durations"]),
+            "findings_per_review": round(group["findings"] / group["reviews"], 3),
+        }
+        for (model, prompt_version), group in groups.items()
+    ]
+    by_model.sort(key=lambda item: (-int(item["reviews"]), item["model"], item["prompt_version"]))
+
+    sorted_durations = sorted(durations)
+    return {
+        "days": days,
+        "since": since.date().isoformat(),
+        "until": now.date().isoformat(),
+        "capped": capped,
+        "totals": {
+            "reviews": total,
+            "complete": outcomes["complete"],
+            "partial": outcomes["partial"],
+            "failed": outcomes["failed"],
+            "failure_rate": round(outcomes["failed"] / total, 4) if total else 0.0,
+        },
+        "duration_s": {
+            "median": _median(durations),
+            "p95": _percentile(sorted_durations, 0.95),
+        },
+        "tokens": {"mean": _mean(tokens), "median": _median(tokens)},
+        "by_day": by_day,
+        "findings": findings,
+        "by_model": by_model,
+    }

@@ -71,6 +71,7 @@ def test_the_dockerfile_builds_in_two_stages_and_runs_as_non_root() -> None:
     text = (ROOT / "Dockerfile").read_text()
     assert len(re.findall(r"^FROM python:3\.13-slim", text, re.M)) == 2
     assert "AS build" in text
+    assert "AS web" in text
     assert "--frozen" in text
     assert "--no-dev" in text
     assert "apt-get install -y --no-install-recommends git ca-certificates" in text
@@ -86,7 +87,12 @@ def test_the_dockerfile_builds_in_two_stages_and_runs_as_non_root() -> None:
 
 def test_the_dockerfile_never_copies_secrets_or_local_state() -> None:
     copies = re.findall(r"^COPY (?!--from).*$", (ROOT / "Dockerfile").read_text(), re.M)
-    assert copies == ["COPY pyproject.toml uv.lock ./", "COPY src ./src"]
+    assert copies == [
+        "COPY web/package.json web/package-lock.json web/.npmrc ./",
+        "COPY web/ ./",
+        "COPY pyproject.toml uv.lock ./",
+        "COPY src ./src",
+    ]
 
 
 def test_dockerignore_keeps_secrets_and_noise_out_of_the_build_context() -> None:
@@ -131,3 +137,21 @@ def test_the_readme_documents_the_variables_the_settings_define() -> None:
     readme = (ROOT / "README.md").read_text()
     for name in Settings.model_fields:
         assert f"FAREJADOR_{name.upper()}" in readme, name
+
+
+def test_the_dashboard_is_built_in_a_pinned_node_stage_that_never_reaches_the_runtime() -> None:
+    text = (ROOT / "Dockerfile").read_text()
+    stages = re.split(r"^(?=FROM )", text, flags=re.M)
+    web = next(stage for stage in stages if " AS web" in stage.splitlines()[0])
+    assert re.match(r"FROM node:\d+\.\d+\.\d+-slim@sha256:[0-9a-f]{64} AS web", web)
+    node_version = (ROOT / "web" / ".nvmrc").read_text().strip()
+    assert f"node:{node_version}-slim@" in web, "the image must match .nvmrc"
+    assert "npm ci --ignore-scripts" in web
+    assert web.index("COPY web/package.json") < web.index("npm ci") < web.index("COPY web/ ./")
+    assert "WEB_OUT=/out" in web
+    runtime = stages[-1]
+    assert "node" not in runtime.lower() and "npm" not in runtime.lower()
+    build = next(stage for stage in stages if " AS build" in stage.splitlines()[0])
+    assert build.index("COPY --from=web /out ./src/farejador/web/static") < build.index(
+        "RUN uv sync --frozen --no-dev --no-editable"
+    ), "the compiled dashboard must be in the package before it is installed"

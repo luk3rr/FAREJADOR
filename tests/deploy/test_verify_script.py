@@ -37,6 +37,7 @@ else
 fi
 """
 
+API = "https://farejador.luk3rr.com"
 SECRET = "whsec-SENTINELVALUE"
 
 GOOD = {
@@ -57,6 +58,13 @@ GOOD = {
     "GET https://farejador.luk3rr.com/webhook": "404",
     "GET https://farejador.luk3rr.com/healthz": "404",
     "GET https://farejador.luk3rr.com/docs": "404",
+    "GET https://farejador.luk3rr.com/": (
+        "200 <title>Farejador</title> "
+        "content-security-policy: default-src 'none'; script-src 'self'"
+    ),
+    "GET https://farejador.luk3rr.com/assets/main.js": "200",
+    "POST https://farejador.luk3rr.com/": "405",
+    "GET https://farejador.luk3rr.com/assets/..%2f..%2fetc/passwd": "404",
 }
 
 
@@ -95,7 +103,7 @@ def test_a_correct_setup_passes_every_external_check(tmp_path: Path) -> None:
         "PASS  POST /webhook from a non-GitHub address is blocked by the WAF (HTTP 403)"
         in result.stdout
     )
-    assert "SKIP  dashboard check" in result.stdout
+    assert "PASS  the page carries the strict content security policy" in result.stdout
     assert "SKIP  port scan" in result.stdout
     assert "All checks passed." in result.stdout
 
@@ -127,23 +135,40 @@ def test_an_unreachable_host_counts_as_a_failure_not_a_pass(tmp_path: Path) -> N
     assert "apex page still answers: got HTTP 000" in result.stdout
 
 
-def test_the_dashboard_must_ask_for_login_when_configured(tmp_path: Path) -> None:
-    table = {**GOOD, "GET https://farejador.luk3rr.com/": "200"}
-    result = _run(
-        tmp_path, table, "external", extra={"FAREJADOR_DASH_URL": "https://farejador.luk3rr.com"}
-    )
+@pytest.mark.parametrize(
+    ("request_line", "wrong", "needle"),
+    [
+        (f"GET {API}/", "502", "the dashboard page answers"),
+        (f"GET {API}/assets/main.js", "404", "the compiled script answers"),
+        (f"POST {API}/", "200", "a write on the page is refused"),
+        (f"GET {API}/assets/..%2f..%2fetc/passwd", "200", "path traversal under /assets/"),
+    ],
+)
+def test_each_dashboard_breakage_is_reported(
+    tmp_path: Path, request_line: str, wrong: str, needle: str
+) -> None:
+    body = GOOD[request_line].partition(" ")[2]
+    result = _run(tmp_path, {**GOOD, request_line: f"{wrong} {body}".strip()}, "external")
     assert result.returncode == 1
-    assert "dashboard asks for login" in result.stdout
-    table["GET https://farejador.luk3rr.com/"] = "302"
-    assert (
-        _run(
-            tmp_path,
-            table,
-            "external",
-            extra={"FAREJADOR_DASH_URL": "https://farejador.luk3rr.com"},
-        ).returncode
-        == 0
-    )
+    failing = [line for line in result.stdout.splitlines() if line.startswith("FAIL")]
+    assert any(needle in line for line in failing), result.stdout
+
+
+def test_a_page_without_the_strict_policy_fails(tmp_path: Path) -> None:
+    table = {**GOOD, f"GET {API}/": "200 <title>Farejador</title> content-security-policy: *"}
+    result = _run(tmp_path, table, "external")
+    assert result.returncode == 1
+    assert "FAIL  the page does not carry the strict content security policy" in result.stdout
+
+
+def test_a_page_that_is_not_the_dashboard_fails(tmp_path: Path) -> None:
+    table = {
+        **GOOD,
+        f"GET {API}/": "200 <h1>Welcome to nginx</h1> content-security-policy: default-src 'none'",
+    }
+    result = _run(tmp_path, table, "external")
+    assert result.returncode == 1
+    assert "the page is the Farejador dashboard" in result.stdout
 
 
 def test_an_open_port_on_the_server_is_a_failure_and_a_closed_one_passes(tmp_path: Path) -> None:
@@ -195,9 +220,6 @@ def test_the_script_is_valid_bash_with_the_file_header() -> None:
     assert os.access(SCRIPT, os.X_OK)
 
 
-API = "https://farejador.luk3rr.com"
-
-
 @pytest.mark.parametrize(
     ("request_line", "wrong", "needle"),
     [
@@ -209,7 +231,7 @@ API = "https://farejador.luk3rr.com"
         (f"POST {API}/webhook", "200", "the webhook path is not reachable on the API host"),
         (f"GET {API}/webhook", "405", "the webhook path is not readable on the API host"),
         (f"GET {API}/healthz", "200", "the health path is not public on the API host"),
-        (f"GET {API}/docs", "200", "anything outside /api/ is blocked"),
+        (f"GET {API}/docs", "200", "anything outside the panel and /api/ is blocked"),
     ],
 )
 def test_each_api_exposure_is_reported_as_a_failure(

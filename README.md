@@ -126,6 +126,11 @@ da porta 8080 um proxy reverso que termine TLS (Caddy ou nginx) e aponte a URL d
 túnel como `cloudflared` ou `ngrok` e use essa URL nas configurações do App.
 `GET /healthz` devolve `{"status": "ok"}` para monitoramento.
 
+### Painel e API de leitura
+
+No modo `webhook` o serviço também serve um painel público e somente leitura em `/` e a
+[API de leitura](docs/api.md) em `/api/`, só com repositórios públicos. Veja [docs/painel.md](docs/painel.md).
+
 ## Como usar
 
 1. Abra um pull request (fora de rascunho) em um repositório onde o App está instalado. A revisão

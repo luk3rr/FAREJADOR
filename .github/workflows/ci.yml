@@ -23,6 +23,11 @@ jobs:
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
       - name: Install dependencies
         run: uv sync --frozen
       - name: Lint (includes the security rules)
@@ -33,6 +38,12 @@ jobs:
         run: uv run mypy src
       - name: Tests with coverage
         run: uv run pytest --cov=farejador --cov-report=xml --cov-fail-under=80
+      - name: Install the dashboard toolchain (no install scripts)
+        run: npm --prefix web ci --ignore-scripts
+      - name: Dashboard types (strict)
+        run: npm --prefix web run check
+      - name: Dashboard tests
+        run: npm --prefix web test
       - name: SonarCloud scan
         if: ${{ env.SONAR_TOKEN != '' }}
         uses: SonarSource/sonarqube-scan-action@2f77a1ec69fb1d595b06f35ab27e97605bdef703 # v5.3.2
@@ -47,6 +58,8 @@ jobs:
       - name: The CLI runs inside the container as a non-root user
         run: |
           docker run --rm farejador:ci version
+          docker run --rm --entrypoint python farejador:ci -c "from farejador.web import DEFAULT_STATIC_DIR as d; assert (d / 'index.html').is_file() and (d / 'assets' / 'main.js').is_file(), 'the dashboard is not in the image'"
+          test -z "$(docker run --rm --entrypoint sh farejador:ci -c 'command -v node || true')"
           test "$(docker run --rm --entrypoint id farejador:ci -u)" != "0"
       - name: Compose profiles are valid
         run: |

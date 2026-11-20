@@ -36,6 +36,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/farejador"]
+# The compiled dashboard is ignored by git but belongs in the wheel.
+artifacts = ["src/farejador/web/static/**"]
 
 [tool.ruff]
 line-length = 100

@@ -10,14 +10,21 @@ from pathlib import Path
 from tests.api_env import api_client, seed
 
 from farejador.api.routes import (
+    DayCount,
+    DurationStats,
     ErrorOut,
+    FindingDestinations,
     FindingOut,
     MessageOut,
+    ModelRow,
     ResponseOut,
     ReviewDetail,
     ReviewSummary,
+    StatsOut,
+    StatsTotals,
     StatusOut,
     StepOut,
+    TokenStats,
     ToolCallOut,
     ToolResultOut,
 )
@@ -75,3 +82,21 @@ def test_the_design_document_names_the_same_summary_fields() -> None:
     block = text.split("// GET /api/reviews\n", 1)[1].split("```", 1)[0]
     documented = set(re.findall(r'"([a-z_]+)":', block))
     assert (SUMMARY - {"steps"}) <= documented | {"next_cursor", "items"}
+
+
+def test_the_stats_models_have_exactly_the_contract_fields() -> None:
+    assert set(StatsOut.model_fields) == {
+        "days", "since", "until", "capped", "totals", "duration_s", "tokens", "by_day",
+        "findings", "by_model",
+    }  # fmt: skip
+    assert set(StatsTotals.model_fields) == {
+        "reviews", "complete", "partial", "failed", "failure_rate",
+    }  # fmt: skip
+    assert set(DurationStats.model_fields) == {"median", "p95"}
+    assert set(TokenStats.model_fields) == {"mean", "median"}
+    assert set(DayCount.model_fields) == {"day", "reviews"}
+    assert set(FindingDestinations.model_fields) == {"inline", "summary", "dropped"}
+    assert set(ModelRow.model_fields) == {
+        "model", "prompt_version", "reviews", "failed", "mean_tokens", "median_duration_s",
+        "findings_per_review",
+    }  # fmt: skip

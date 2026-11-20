@@ -27,3 +27,9 @@ data
 .pre-commit-config.yaml
 sonar-project.properties
 farejador*.jpeg
+
+# Dashboard: the image builds it from the sources, never from a local build
+web/node_modules
+web/.test-build
+web/dist
+src/farejador/web/static

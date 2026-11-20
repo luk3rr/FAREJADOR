@@ -241,3 +241,17 @@ def test_the_trace_variables_the_runbook_names_are_documented_in_the_env_example
     for variable in set(re.findall(r"\bFAREJADOR_TRACE_[A-Z_]+\b", _all_text())):
         assert variable in fields, variable
         assert variable in example, variable
+
+
+def test_the_runbook_explains_the_panel_rules_that_match_what_the_app_serves() -> None:
+    text = (DOCS / "02-cloudflare.md").read_text()
+    for needle in (
+        "^/($|assets/|api/)",
+        'http.request.uri.path eq "/"',
+        'starts_with(http.request.uri.path, "/assets/")',
+        'http.host eq "farejador.luk3rr.com")\n',
+        "The dashboard",
+    ):
+        assert needle in text, needle
+    verify = (ROOT / "scripts" / "verify_deploy.sh").read_text()
+    assert "/assets/main.js" in verify

@@ -323,11 +323,11 @@ async def test_a_query_that_runs_too_long_is_interrupted_with_a_503(
     assert response.status_code == 503 and response.json() == {"error": "trace_unavailable"}
 
 
-async def test_the_openapi_schema_describes_exactly_the_three_routes(tmp_path: Path) -> None:
+async def test_the_openapi_schema_describes_exactly_the_four_routes(tmp_path: Path) -> None:
     seeded = seed(tmp_path)
     async with api_client(seeded.path) as client:
         response = await client.get("/openapi.json")
     schema = response.json()
-    assert set(schema["paths"]) == {"/reviews", "/reviews/{review_id}", "/status"}
+    assert set(schema["paths"]) == {"/reviews", "/reviews/{review_id}", "/stats", "/status"}
     assert {m for p in schema["paths"].values() for m in p} == {"get"}  # HEAD is implied
     assert json.dumps(schema)  # serializable
