@@ -14,7 +14,9 @@ from pathlib import PurePosixPath
 
 from farejador.review.diff import DiffFile, FileStatus
 
-MASKED = "[MASKED]"
+# Not code-like on purpose: a placeholder such as "[MASKED]" read as a Python list and made the
+# model invent a TypeError. The guillemets also survive the markdown sanitizer.
+MASKED = "«segredo-removido»"
 
 # -- ignore list -----------------------------------------------------------------------------
 

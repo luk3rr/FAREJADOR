@@ -73,3 +73,13 @@ def test_reevaluate_prompts_describe_threads_and_the_final_tool() -> None:
     assert '<thread id="T2" location="desconhecido">' in user
     assert user.count("</thread>") == 2
     assert "<\\/thread>" in user
+
+
+def test_the_prompt_tells_the_model_what_the_masking_marker_means() -> None:
+    from farejador.review.filters import MASKED
+
+    for system in (prompts.review_system_prompt(), prompts.reevaluate_system_prompt()):
+        assert MASKED in system
+        assert "segredo escrito no código" in system
+        assert "severity high, category security" in system
+        assert "nunca trate o marcador como código" in system

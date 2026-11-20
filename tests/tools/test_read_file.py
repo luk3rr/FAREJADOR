@@ -116,7 +116,7 @@ def test_secrets_in_file_content_are_masked_before_reaching_the_model(tmp_path: 
     tools = RepoTools(root)
     read = tools.execute("read_file", {"path": "app.py"})
     assert token not in read
-    assert "[MASKED]" in read
+    assert "«segredo-removido»" in read
     assert "2: print('ok')" in read
     assert token not in tools.execute("grep", {"pattern": "TOKEN"})
     key = tools.execute("read_file", {"path": "key.txt"})

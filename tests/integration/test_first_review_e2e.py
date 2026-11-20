@@ -94,7 +94,7 @@ async def test_secrets_never_reach_the_model_the_comments_or_the_logs(
     model_view = _everything_the_model_saw(env)
     for secret in ALL_SECRETS:
         assert secret not in model_view
-    assert "[MASKED]" in model_view
+    assert "«segredo-removido»" in model_view
     assert "indisponível" in model_view  # the .env file could not be read
 
     # 2. what the model echoed back was masked before publishing

@@ -152,7 +152,7 @@ def test_secrets_echoed_in_the_diff_or_the_text_are_masked() -> None:
         )
     )
     assert token not in text
-    assert "[MASKED]" in text
+    assert "«segredo-removido»" in text
 
 
 def test_untrusted_text_is_sanitized_in_every_part() -> None:

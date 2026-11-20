@@ -85,3 +85,10 @@ def test_url_credentials_are_masked_but_host_is_kept() -> None:
 def test_masking_never_changes_the_number_of_lines() -> None:
     text = "a\n\n" + PEM + "\npassword = 'abcdefgh'\n\nend\n"
     assert len(mask(text).split("\n")) == len(text.split("\n"))
+
+
+def test_the_marker_does_not_look_like_python_or_json_syntax() -> None:
+    """A "[MASKED]" placeholder was read as a list and made the model invent a TypeError."""
+    assert not any(char in MASKED for char in "[]{}()<>\"'")
+    assert mask('password = "hunter2-admin"') == f"password = {MASKED}"
+    assert mask('password = "hunter2-admin"').isprintable()
