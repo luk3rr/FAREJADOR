@@ -1,0 +1,104 @@
+# Filename: test_config.py
+# Created on: November 20, 2026
+# Author: Lucas Araújo <araujolucas@dcc.ufmg.br>
+
+from pathlib import Path
+
+import pytest
+
+from farejador.config import ConfigError, Mode, Settings
+
+SECRET_KEY = "sk-or-v1-supersecretvalue1234567890"
+WEBHOOK_SECRET = "whsec-topsecret-value"
+
+
+@pytest.fixture
+def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
+    key_file = tmp_path / "app.pem"
+    key_file.write_text("dummy")
+    for name in list(__import__("os").environ):
+        if name.startswith("FAREJADOR_"):
+            monkeypatch.delenv(name)
+    monkeypatch.setenv("FAREJADOR_GITHUB_APP_ID", "12345")
+    monkeypatch.setenv("FAREJADOR_GITHUB_PRIVATE_KEY_PATH", str(key_file))
+    monkeypatch.setenv("FAREJADOR_OPENROUTER_API_KEY", SECRET_KEY)
+    monkeypatch.setenv("FAREJADOR_MODEL", "some/model")
+    return monkeypatch
+
+
+def test_defaults_match_contract(env: pytest.MonkeyPatch) -> None:
+    settings = Settings.load()
+    assert settings.mode is Mode.POLLING
+    assert settings.trigger_text == "@farejador"
+    assert settings.poll_interval_s == 60
+    assert settings.workers == 2
+    assert (settings.max_steps, settings.max_tokens) == (15, 200_000)
+    assert (settings.max_seconds, settings.max_files) == (300, 40)
+    assert settings.state_path == Path("/data/farejador.db")
+    assert (settings.host, settings.port) == ("127.0.0.1", 8080)
+    assert settings.ignore_globs == []
+
+
+def test_missing_required_variable_names_it_only(env: pytest.MonkeyPatch) -> None:
+    env.delenv("FAREJADOR_OPENROUTER_API_KEY")
+    with pytest.raises(ConfigError) as info:
+        Settings.load()
+    assert "FAREJADOR_OPENROUTER_API_KEY is required" in str(info.value)
+
+
+def test_invalid_value_error_does_not_echo_value(env: pytest.MonkeyPatch) -> None:
+    env.setenv("FAREJADOR_PORT", "not-a-number-" + SECRET_KEY)
+    with pytest.raises(ConfigError) as info:
+        Settings.load()
+    assert "FAREJADOR_PORT" in str(info.value)
+    assert SECRET_KEY not in str(info.value)
+
+
+@pytest.mark.parametrize("mode", ["webhook", "both"])
+def test_webhook_modes_require_secret(env: pytest.MonkeyPatch, mode: str) -> None:
+    env.setenv("FAREJADOR_MODE", mode)
+    with pytest.raises(ConfigError) as info:
+        Settings.load()
+    assert "FAREJADOR_WEBHOOK_SECRET is required" in str(info.value)
+
+    env.setenv("FAREJADOR_WEBHOOK_SECRET", WEBHOOK_SECRET)
+    assert Settings.load().mode == Mode(mode)
+
+
+def test_polling_does_not_require_webhook_secret(env: pytest.MonkeyPatch) -> None:
+    env.setenv("FAREJADOR_MODE", "polling")
+    assert Settings.load().webhook_secret is None
+
+
+def test_unknown_mode_is_rejected(env: pytest.MonkeyPatch) -> None:
+    env.setenv("FAREJADOR_MODE", "carrier-pigeon")
+    with pytest.raises(ConfigError, match="FAREJADOR_MODE"):
+        Settings.load()
+
+
+def test_private_key_must_be_a_file(env: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    env.setenv("FAREJADOR_GITHUB_PRIVATE_KEY_PATH", str(tmp_path / "missing.pem"))
+    with pytest.raises(ConfigError, match="FAREJADOR_GITHUB_PRIVATE_KEY_PATH"):
+        Settings.load()
+
+
+def test_ignore_globs_are_split_and_trimmed(env: pytest.MonkeyPatch) -> None:
+    env.setenv("FAREJADOR_IGNORE_GLOBS", " *.snap, docs/** ,, vendor/** ")
+    assert Settings.load().ignore_globs == ["*.snap", "docs/**", "vendor/**"]
+
+
+def test_log_level_is_normalised_and_validated(env: pytest.MonkeyPatch) -> None:
+    env.setenv("FAREJADOR_LOG_LEVEL", "debug")
+    assert Settings.load().log_level == "DEBUG"
+    env.setenv("FAREJADOR_LOG_LEVEL", "loud")
+    with pytest.raises(ConfigError, match="FAREJADOR_LOG_LEVEL"):
+        Settings.load()
+
+
+def test_secrets_are_hidden_in_repr_and_listed_for_redaction(env: pytest.MonkeyPatch) -> None:
+    env.setenv("FAREJADOR_MODE", "both")
+    env.setenv("FAREJADOR_WEBHOOK_SECRET", WEBHOOK_SECRET)
+    settings = Settings.load()
+    assert SECRET_KEY not in repr(settings)
+    assert WEBHOOK_SECRET not in repr(settings)
+    assert set(settings.secret_values()) == {SECRET_KEY, WEBHOOK_SECRET}

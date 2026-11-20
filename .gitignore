@@ -1,0 +1,41 @@
+# AI-DLC: versioned knowledge and plans, local logs (same policy as MOINEX/MIND/DUSK)
+.aidlc/**/audit.md
+.aidlc/**/archive/
+.aidlc/**/screenshots/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.python-version.local
+build/
+dist/
+*.egg-info/
+
+# Tooling caches and reports
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.scannerwork/
+.sonar/
+
+# Runtime state and secrets (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+/data/
+*.db
+*.sqlite3
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+
+# Local secrets mounted into containers
+secrets/
+.env.smoke

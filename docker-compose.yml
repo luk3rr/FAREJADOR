@@ -1,0 +1,43 @@
+# One image, two profiles:
+#   docker compose --profile polling up --build    # local: polls GitHub, no public endpoint
+#   docker compose --profile webhook up --build    # server: receives signed webhooks on :8080
+x-farejador: &farejador
+  image: farejador:local
+  build: .
+  env_file: ${FAREJADOR_ENV_FILE:-.env}
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  mem_limit: 1g
+  cpus: 2
+  tmpfs:
+    - /tmp:size=1g,mode=1777
+  volumes:
+    - farejador-data:/data
+    - ${FAREJADOR_PRIVATE_KEY_FILE:-./secrets/app.pem}:/run/secrets/github_app.pem:ro
+
+services:
+  polling:
+    <<: *farejador
+    profiles: ["polling"]
+    environment:
+      FAREJADOR_MODE: polling
+
+  webhook:
+    <<: *farejador
+    profiles: ["webhook"]
+    environment:
+      FAREJADOR_MODE: webhook
+      FAREJADOR_PORT: "8080"
+    ports:
+      - "${FAREJADOR_HOST_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "farejador", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  farejador-data:

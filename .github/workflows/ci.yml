@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Lint (includes the security rules)
+        run: uv run ruff check .
+      - name: Format check
+        run: uv run ruff format --check .
+      - name: Type check
+        run: uv run mypy src
+      - name: Tests with coverage
+        run: uv run pytest --cov=farejador --cov-report=xml --cov-fail-under=80
+      - name: SonarCloud scan
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: SonarSource/sonarqube-scan-action@v5
+
+  image:
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t farejador:ci .
+      - name: The CLI runs inside the container as a non-root user
+        run: |
+          docker run --rm farejador:ci version
+          test "$(docker run --rm --entrypoint id farejador:ci -u)" != "0"
+      - name: Compose profiles are valid
+        run: |
+          openssl genrsa -out "$RUNNER_TEMP/app.pem" 2048
+          printf '%s\n' \
+            FAREJADOR_GITHUB_APP_ID=1 \
+            FAREJADOR_GITHUB_PRIVATE_KEY_PATH=/run/secrets/github_app.pem \
+            FAREJADOR_WEBHOOK_SECRET=ci-secret \
+            FAREJADOR_OPENROUTER_API_KEY=sk-or-ci-key \
+            FAREJADOR_MODEL=test/model > "$RUNNER_TEMP/ci.env"
+          export FAREJADOR_ENV_FILE="$RUNNER_TEMP/ci.env"
+          export FAREJADOR_PRIVATE_KEY_FILE="$RUNNER_TEMP/app.pem"
+          docker compose --profile polling config --quiet
+          docker compose --profile webhook config --quiet
