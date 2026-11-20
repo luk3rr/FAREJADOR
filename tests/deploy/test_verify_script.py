@@ -15,19 +15,26 @@ from tests.workflows import ROOT
 
 SCRIPT = ROOT / "scripts" / "verify_deploy.sh"
 
-# The fake curl answers according to "<method> <url>" lines of a table file.
+# The fake curl answers according to "<method> <url> <code> [<body>]" lines of a table file:
+# it prints the status code when asked for it (-w) and the body otherwise.
 CURL_STUB = """#!/usr/bin/env bash
-method=""; url=""
+method="GET"; url=""; want_code=0
 while [ $# -gt 0 ]; do
   case "$1" in
     -X) method="$2"; shift 2 ;;
+    -w) want_code=1; shift 2 ;;
     http*) url="$1"; shift ;;
     *) shift ;;
   esac
 done
 echo "curl $method $url" >> "$STUB_DIR/curl.log"
-code="$(grep -F "$method $url " "$STUB_DIR/table" | head -n 1 | awk '{print $3}')"
-echo -n "${code:-000}"
+line="$(grep -F "$method $url " "$STUB_DIR/table" | head -n 1)"
+if [ "$want_code" = 1 ]; then
+  code="$(printf '%s' "$line" | awk '{print $3}')"
+  echo -n "${code:-000}"
+else
+  printf '%s' "$line" | cut -d' ' -f4-
+fi
 """
 
 SECRET = "whsec-SENTINELVALUE"
@@ -39,6 +46,17 @@ GOOD = {
     "GET https://hooks.luk3rr.com/docs": "404",
     "POST https://hooks.luk3rr.com/webhook": "403",
     "POST https://hooks.luk3rr.com/anything": "403",
+    "GET https://farejador.luk3rr.com/api/status": (
+        '200 {"status":"ok","trace_available":true,"retention_days":30,"reviews":3}'
+    ),
+    "GET https://farejador.luk3rr.com/api/reviews?limit=1": '200 {"items":[],"next_cursor":null}',
+    "GET https://farejador.luk3rr.com/api/reviews/999999999": '404 {"error":"not_found"}',
+    "POST https://farejador.luk3rr.com/api/reviews": "403",
+    "DELETE https://farejador.luk3rr.com/api/reviews/1": "403",
+    "POST https://farejador.luk3rr.com/webhook": "403",
+    "GET https://farejador.luk3rr.com/webhook": "404",
+    "GET https://farejador.luk3rr.com/healthz": "404",
+    "GET https://farejador.luk3rr.com/docs": "404",
 }
 
 
@@ -175,3 +193,79 @@ def test_the_script_is_valid_bash_with_the_file_header() -> None:
     lines = SCRIPT.read_text().splitlines()
     assert lines[:2] == ["#!/usr/bin/env bash", "# Filename: verify_deploy.sh"]
     assert os.access(SCRIPT, os.X_OK)
+
+
+API = "https://farejador.luk3rr.com"
+
+
+@pytest.mark.parametrize(
+    ("request_line", "wrong", "needle"),
+    [
+        (f"GET {API}/api/status", "500", "GET /api/status answers"),
+        (f"GET {API}/api/reviews?limit=1", "502", "GET /api/reviews answers"),
+        (f"GET {API}/api/reviews/999999999", "200", "an unknown review is a 404"),
+        (f"POST {API}/api/reviews", "200", "a write on the API is refused"),
+        (f"DELETE {API}/api/reviews/1", "204", "a delete on the API is refused"),
+        (f"POST {API}/webhook", "200", "the webhook path is not reachable on the API host"),
+        (f"GET {API}/webhook", "405", "the webhook path is not readable on the API host"),
+        (f"GET {API}/healthz", "200", "the health path is not public on the API host"),
+        (f"GET {API}/docs", "200", "anything outside /api/ is blocked"),
+    ],
+)
+def test_each_api_exposure_is_reported_as_a_failure(
+    tmp_path: Path, request_line: str, wrong: str, needle: str
+) -> None:
+    body = GOOD[request_line].partition(" ")[2]  # only the status code is wrong, not the body
+    result = _run(tmp_path, {**GOOD, request_line: f"{wrong} {body}".strip()}, "external")
+    assert result.returncode == 1
+    failing = [line for line in result.stdout.splitlines() if line.startswith("FAIL")]
+    assert len(failing) == 1 and needle in failing[0], result.stdout
+
+
+@pytest.mark.parametrize("code", ["403", "405"])
+def test_a_write_refused_by_the_waf_or_by_the_api_both_count(tmp_path: Path, code: str) -> None:
+    table = {**GOOD, f"POST {API}/api/reviews": code, f"DELETE {API}/api/reviews/1": code}
+    assert _run(tmp_path, table, "external").returncode == 0
+
+
+def test_an_api_whose_trace_is_unavailable_fails_even_with_a_200(tmp_path: Path) -> None:
+    table = {**GOOD, f"GET {API}/api/status": '200 {"status":"ok","trace_available":false}'}
+    result = _run(tmp_path, table, "external")
+    assert result.returncode == 1
+    assert "says the trace is available: the answer does not contain" in result.stdout
+
+
+def test_a_reviews_answer_that_is_not_a_list_fails(tmp_path: Path) -> None:
+    table = {**GOOD, f"GET {API}/api/reviews?limit=1": '200 {"error":"trace_unavailable"}'}
+    result = _run(tmp_path, table, "external")
+    assert result.returncode == 1 and "is a JSON list" in result.stdout
+
+
+def test_the_api_checks_can_be_skipped_explicitly(tmp_path: Path) -> None:
+    only_hooks = {k: v for k, v in GOOD.items() if "farejador.luk3rr.com" not in k}
+    result = _run(tmp_path, only_hooks, "external", extra={"FAREJADOR_API_URL": "none"})
+    assert result.returncode == 0, result.stdout
+    assert "SKIP  API checks" in result.stdout
+
+
+def test_an_unreachable_api_is_a_failure_not_a_pass(tmp_path: Path) -> None:
+    only_hooks = {k: v for k, v in GOOD.items() if "farejador.luk3rr.com" not in k}
+    result = _run(tmp_path, only_hooks, "external")
+    assert result.returncode == 1
+    assert "GET /api/status answers: got HTTP 000" in result.stdout
+
+
+def test_the_api_address_can_be_changed(tmp_path: Path) -> None:
+    moved = {
+        key.replace("farejador.luk3rr.com", "api.example.org"): value for key, value in GOOD.items()
+    }
+    result = _run(
+        tmp_path, moved, "external", extra={"FAREJADOR_API_URL": "https://api.example.org"}
+    )
+    assert result.returncode == 0, result.stdout
+
+
+def test_the_server_mode_also_checks_the_trace_file() -> None:
+    text = SCRIPT.read_text()
+    assert "exec farejador test -s /data/trace.db" in text
+    assert "the trace database exists in the data volume" in text

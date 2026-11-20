@@ -72,6 +72,8 @@ jobs:
           push: true
           provenance: false
           sbom: false
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.number }}
           tags: |
             ${{ env.IMAGE }}:${{ steps.version.outputs.number }}
             ${{ env.IMAGE }}:sha-${{ steps.version.outputs.short }}

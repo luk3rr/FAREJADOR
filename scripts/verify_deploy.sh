@@ -15,6 +15,7 @@
 set -uo pipefail
 
 HOOKS_URL="${FAREJADOR_HOOKS_URL:-https://hooks.luk3rr.com}"
+API_URL="${FAREJADOR_API_URL:-https://farejador.luk3rr.com}"  # "none" skips the API checks
 APEX_URL="${FAREJADOR_APEX_URL:-https://luk3rr.com}"
 DASH_URL="${FAREJADOR_DASH_URL:-}"
 CURL="${FAREJADOR_CURL:-curl}"
@@ -33,6 +34,22 @@ skip() { printf 'SKIP  %s\n' "$*"; }
 http_code() {
     # $1 = method, $2 = url; prints the status code, or 000 when nothing answered.
     "$CURL" -s -o /dev/null -w '%{http_code}' --max-time "$CURL_TIMEOUT" -X "$1" "$2" 2>/dev/null || true
+}
+
+http_body() {
+    # $1 = url; prints the body of a GET, or nothing when nothing answered.
+    "$CURL" -s --max-time "$CURL_TIMEOUT" "$1" 2>/dev/null || true
+}
+
+expect_body() {
+    # $1 = description, $2 = url, $3 = text the body must contain
+    local body
+    body="$(http_body "$2")"
+    if [[ "$body" == *"$3"* ]]; then
+        pass "$1"
+    else
+        fail "$1: the answer does not contain ${3}"
+    fi
 }
 
 expect_code() {
@@ -65,6 +82,7 @@ check_external() {
     expect_code "other paths are blocked" GET "${HOOKS_URL}/docs" 403 404
     expect_code "POST /webhook from a non-GitHub address is blocked by the WAF" POST "${HOOKS_URL}/webhook" 403
     expect_code "POST on another path is blocked" POST "${HOOKS_URL}/anything" 403 404
+    check_api
     if [ -n "$DASH_URL" ]; then
         expect_code "dashboard asks for login (Cloudflare Access)" GET "${DASH_URL}/" 302 401 403
     else
@@ -85,6 +103,25 @@ check_external() {
         fi
     done
     echo "Note: port 22 is expected to be closed unless you opened it for yourself on purpose."
+}
+
+check_api() {
+    if [ "$API_URL" = "none" ]; then
+        skip "API checks (FAREJADOR_API_URL=none)"
+        return
+    fi
+    echo "== The public API (${API_URL})"
+    expect_code "GET /api/status answers" GET "${API_URL}/api/status" 200
+    expect_body "/api/status says the trace is available" "${API_URL}/api/status" '"trace_available":true'
+    expect_code "GET /api/reviews answers" GET "${API_URL}/api/reviews?limit=1" 200
+    expect_body "/api/reviews is a JSON list" "${API_URL}/api/reviews?limit=1" '"items"'
+    expect_code "an unknown review is a 404" GET "${API_URL}/api/reviews/999999999" 404
+    expect_code "a write on the API is refused" POST "${API_URL}/api/reviews" 403 405
+    expect_code "a delete on the API is refused" DELETE "${API_URL}/api/reviews/1" 403 405
+    expect_code "the webhook path is not reachable on the API host" POST "${API_URL}/webhook" 403 404
+    expect_code "the webhook path is not readable on the API host" GET "${API_URL}/webhook" 403 404
+    expect_code "the health path is not public on the API host" GET "${API_URL}/healthz" 403 404
+    expect_code "anything outside /api/ is blocked" GET "${API_URL}/docs" 403 404
 }
 
 check_server() {
@@ -121,6 +158,12 @@ check_server() {
     done
     mode="$(stat -c '%a %u' "${HOME_DIR}/secrets/github_app.pem" 2>/dev/null || echo missing)"
     [ "$mode" = "400 10001" ] && pass "github_app.pem is 400 and owned by uid 10001" || fail "github_app.pem has mode/owner ${mode}"
+
+    if "$DOCKER" exec farejador test -s /data/trace.db 2>/dev/null; then
+        pass "the trace database exists in the data volume"
+    else
+        fail "the trace database /data/trace.db is missing or empty"
+    fi
 
     swapon --show=NAME --noheadings 2>/dev/null | grep -q . && pass "swap is active" || fail "swap is not active"
 }

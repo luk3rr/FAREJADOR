@@ -68,3 +68,9 @@ def test_the_image_installs_only_from_the_lockfile_and_points_to_the_repository(
     assert "uv sync --frozen --no-dev --no-editable" in dockerfile
     assert 'org.opencontainers.image.source="https://github.com/luk3rr/FAREJADOR"' in dockerfile
     assert (ROOT / "uv.lock").is_file()
+
+
+def test_the_image_exposes_its_release_version_to_the_application() -> None:
+    dockerfile = (ROOT / "Dockerfile").read_text()
+    assert "ARG APP_VERSION=dev" in dockerfile
+    assert "FAREJADOR_APP_VERSION=${APP_VERSION}" in dockerfile

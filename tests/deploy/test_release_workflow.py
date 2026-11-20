@@ -155,3 +155,8 @@ def test_actions_used_by_each_job_are_the_expected_ones() -> None:
     assert "docker/build-push-action" in _uses(JOBS["publish"])
     assert "sigstore/cosign-installer" in _uses(JOBS["sign"])
     assert "sigstore/cosign-installer" in _uses(JOBS["promote"])
+
+
+def test_the_image_is_built_with_the_release_version_so_traces_can_tell_releases_apart() -> None:
+    build = next(s for s in steps(JOBS["publish"]) if s.get("id") == "build")
+    assert "APP_VERSION=${{ steps.version.outputs.number }}" in build["with"]["build-args"]

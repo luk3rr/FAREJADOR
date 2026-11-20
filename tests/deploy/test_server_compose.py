@@ -132,3 +132,25 @@ def test_the_service_runs_the_updater_once_with_a_time_limit_and_restrictions() 
     assert service["Service"]["NoNewPrivileges"] == "true"
     assert "network-online.target" in service["Unit"]["After"]
     assert "docker.service" in service["Unit"]["After"]
+
+
+def test_the_trace_database_lives_in_the_persistent_data_volume() -> None:
+    from farejador.config import Settings
+
+    default = Settings.model_fields["trace_path"].default
+    assert str(default) == "/data/trace.db"
+    assert "farejador-data:/data" in SERVICES["farejador"]["volumes"]
+    assert "farejador-data" in COMPOSE["volumes"]
+    # the volume is the only writable place besides the size-limited /tmp
+    assert SERVICES["farejador"]["read_only"] is True
+    # the compose does not move the trace out of the volume
+    assert "FAREJADOR_TRACE_PATH" not in str(SERVICES["farejador"].get("environment", {}))
+
+
+def test_the_server_env_example_documents_the_trace_settings_that_matter() -> None:
+    text = (ROOT / "deploy" / "farejador.env.example").read_text()
+    for name in ("FAREJADOR_TRACE_ENABLED", "FAREJADOR_TRACE_RETENTION_DAYS"):
+        assert re.search(rf"^# {name}=", text, re.M), name
+    for line in text.splitlines():
+        if line.startswith("# FAREJADOR_TRACE"):
+            assert "=" in line  # a commented default, never a value with a secret

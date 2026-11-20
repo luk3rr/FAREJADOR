@@ -24,6 +24,9 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     FAREJADOR_STATE_PATH=/data/farejador.db \
     FAREJADOR_HOST=0.0.0.0
+# The release passes its tag here so the trace can tell versions apart; a local build says "dev".
+ARG APP_VERSION=dev
+ENV FAREJADOR_APP_VERSION=${APP_VERSION}
 LABEL org.opencontainers.image.source="https://github.com/luk3rr/FAREJADOR" \
       org.opencontainers.image.description="Farejador: agentic first-pass code reviewer for GitHub pull requests"
 USER farejador

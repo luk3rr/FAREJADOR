@@ -44,3 +44,4 @@ secrets/
 docs/deploy/
 .aidlc/261121-secure-aws-deploy/
 tmp.txt
+.aidlc/261121-review-trace-api/

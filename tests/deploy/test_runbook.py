@@ -183,3 +183,61 @@ def test_the_readme_links_to_every_guide() -> None:
     readme = (DOCS / "README.md").read_text()
     for path in STEP_GUIDES:
         assert f"({path.name}" in readme, path.name
+
+
+def test_the_runbook_explains_the_api_hostname_with_the_values_the_cloudflare_rules_need() -> None:
+    text = (DOCS / "02-cloudflare.md").read_text()
+    for needle in (
+        "farejador.luk3rr.com",
+        "^/api/",
+        "farejador:8080",
+        'starts_with(http.request.uri.path, "/api/")',
+        'http.request.method in {"GET" "HEAD"}',
+        "farejador-limite",
+        "30 requisições",
+        "Resultado esperado",
+    ):
+        assert needle in text, needle
+    # the single free rate-limit rule is extended, not duplicated
+    assert "uma** regra de limite" in text
+
+
+def test_the_api_rule_expressions_match_what_the_app_serves() -> None:
+    from farejador.api.routes import create_api
+
+    text = (DOCS / "02-cloudflare.md").read_text()
+    schema = create_api("/nonexistent").openapi()
+    assert all(path.startswith("/") for path in schema["paths"])
+    assert "/api/" in text
+    # the app is mounted under /api, so every public path starts with it
+    webhook_source = (ROOT / "src" / "farejador" / "app.py").read_text()
+    assert 'mount(\n            "/api"' in webhook_source or 'mount("/api"' in webhook_source
+
+
+def test_the_operation_guide_covers_the_api_release_the_status_and_the_emergency_switch() -> None:
+    text = (DOCS / "05-operacao.md").read_text()
+    for needle in (
+        "Publicar a API de leitura do trace",
+        "/api/status",
+        "FAREJADOR_TRACE_ENABLED",
+        "FAREJADOR_TRACE_RETENTION_DAYS",
+        "trace maintenance",
+        "trace_unavailable",
+    ):
+        assert needle in text, needle
+
+
+def test_the_recovery_guide_covers_the_trace_file_and_a_repository_that_turns_private() -> None:
+    text = (DOCS / "06-recuperacao.md").read_text()
+    for needle in ("/data/trace.db", "virou privado", "DELETE FROM trace_run", "foreign_keys"):
+        assert needle in text, needle
+
+
+def test_the_trace_variables_the_runbook_names_are_documented_in_the_env_example() -> None:
+    from farejador.config import Settings
+
+    fields = {f"FAREJADOR_{name.upper()}" for name in Settings.model_fields}
+    example = (ROOT / "deploy" / "farejador.env.example").read_text()
+    for variable in set(re.findall(r"\bFAREJADOR_TRACE_[A-Z_]+\b", _all_text())):
+        assert variable in fields, variable
+        assert variable in example, variable
