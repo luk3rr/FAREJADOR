@@ -89,3 +89,11 @@ def test_flock_comes_from_util_linux_because_it_is_not_an_apt_package() -> None:
     install_line = next(line for line in TEXT.splitlines() if "apt-get install -y -qq ca-" in line)
     assert "util-linux" in install_line
     assert " flock " not in install_line
+
+
+def test_the_updater_unit_can_run_a_script_reached_through_a_symlink_into_home() -> None:
+    """ProtectHome=true hid the linked repo and made systemd fail with 203/EXEC."""
+    unit = (ROOT / "deploy" / "farejador-update.service").read_text()
+    assert "ProtectHome=read-only" in unit
+    assert "ProtectHome=true" not in unit
+    assert "ExecStart=/opt/farejador/repo/deploy/update.sh" in unit

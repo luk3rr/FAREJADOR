@@ -11,4 +11,6 @@ Nice=10
 # The script makes only outbound requests and talks to Docker; keep the rest of the host out of reach.
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectHome=true
+# read-only, not true: the repo is usually a symlink into a home directory (see bootstrap.sh), and
+# hiding /home would make systemd fail to even start the script (status 203/EXEC).
+ProtectHome=read-only
