@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import Any
@@ -19,8 +20,11 @@ import httpx
 import uvicorn
 from fastapi import FastAPI
 
+from farejador import __version__
 from farejador.agent.llm import LLMClient, OpenRouterClient
+from farejador.agent.prompts import PROMPT_VERSION
 from farejador.agent.runner import AgentRunner, Budget
+from farejador.api.routes import create_api
 from farejador.commands import CommandHandler
 from farejador.config import ConfigError, Mode, Settings
 from farejador.dispatcher import Dispatcher
@@ -33,6 +37,9 @@ from farejador.review.publisher import Publisher
 from farejador.sources.polling import PollingSource
 from farejador.sources.webhook import create_app
 from farejador.state.store import StateStore
+from farejador.trace.recorder import NullRecorder, Recorder, TraceRecorder
+from farejador.trace.retention import retention_loop
+from farejador.trace.store import TraceStore, TraceUnavailable
 from farejador.workspace import Workspace
 
 logger = logging.getLogger(__name__)
@@ -66,6 +73,7 @@ class Runtime:
     polling: PollingSource | None = None
     webhook_app: FastAPI | None = None
     closers: list[Closer] = field(default_factory=list)
+    trace_store: TraceStore | None = None
 
     async def run(self, stop: asyncio.Event | None = None, *, serve: Serve = serve_uvicorn) -> None:
         stop = stop or asyncio.Event()
@@ -80,6 +88,13 @@ class Runtime:
                     name="webhook",
                 )
             )
+        if self.trace_store is not None:
+            sources_extra = asyncio.create_task(
+                retention_loop(self.trace_store, self.settings.trace_retention_days),
+                name="trace-retention",
+            )
+        else:
+            sources_extra = None
         waiting = asyncio.create_task(stop.wait())
         try:
             done, _ = await asyncio.wait({*sources, waiting}, return_when=asyncio.FIRST_COMPLETED)
@@ -91,7 +106,10 @@ class Runtime:
             waiting.cancel()
             for task in sources:
                 task.cancel()
-            await asyncio.gather(*sources, waiting, return_exceptions=True)
+            background = [sources_extra] if sources_extra is not None else []
+            for task in background:
+                task.cancel()
+            await asyncio.gather(*sources, waiting, *background, return_exceptions=True)
             await self._shutdown()
 
     async def _shutdown(self) -> None:
@@ -130,6 +148,7 @@ async def build_runtime(
         llm = openrouter
 
     store = StateStore(settings.state_path).open()
+    recorder, trace_store = _open_trace(settings, closers)
     runner = AgentRunner(
         llm,
         settings.model,
@@ -151,6 +170,7 @@ async def build_runtime(
         publisher=publisher,
         open_workspace=Workspace.open,
         config=config,
+        recorder=recorder,
     )
     commands = CommandHandler(
         client=client,
@@ -161,6 +181,7 @@ async def build_runtime(
         open_workspace=Workspace.open,
         review=review,
         config=config,
+        recorder=recorder,
     )
     dispatcher = Dispatcher(
         store,
@@ -191,8 +212,54 @@ async def build_runtime(
             bot_login=bot_login,
             mode=settings.mode.value,
         )
+        webhook_app.mount(
+            "/api",
+            create_api(settings.trace_path, retention_days=settings.trace_retention_days),
+        )
     logger.info(
         "farejador ready",
         extra={"mode": settings.mode.value, "model": settings.model, "bot": bot_login},
     )
-    return Runtime(settings, store, dispatcher, polling, webhook_app, closers)
+    return Runtime(
+        settings, store, dispatcher, polling, webhook_app, closers, trace_store=trace_store
+    )
+
+
+def app_version() -> str:
+    """The release the image was built from; the package constant only when run from source."""
+    return os.environ.get("FAREJADOR_APP_VERSION") or __version__
+
+
+def _open_trace(settings: Settings, closers: list[Closer]) -> tuple[Recorder, TraceStore | None]:
+    """Open the trace database; any problem means "no trace", never "no service" (NFR-8)."""
+    if not settings.trace_enabled:
+        return NullRecorder(), None
+    try:
+        store = TraceStore(
+            settings.trace_path,
+            max_item_chars=settings.trace_max_item_chars,
+            max_run_bytes=settings.trace_max_run_bytes,
+        ).open()
+    except TraceUnavailable as exc:
+        logger.error("trace disabled: the database cannot be opened", extra={"reason": str(exc)})
+        return NullRecorder(), None
+    recorder = TraceRecorder(
+        store,
+        model=settings.model,
+        prompt_version=PROMPT_VERSION,
+        app_version=app_version(),
+        budgets={
+            "max_steps": settings.max_steps,
+            "max_tokens": settings.max_tokens,
+            "max_seconds": settings.max_seconds,
+            "max_files": settings.max_files,
+        },
+    )
+    recorder.start()
+
+    async def close_trace() -> None:
+        await asyncio.to_thread(recorder.stop)
+        store.close()
+
+    closers.append(close_trace)
+    return recorder, store

@@ -276,3 +276,141 @@ async def test_the_real_http_server_serves_the_webhook_app_until_asked_to_stop(
         stop.set()
         await asyncio.wait_for(server, timeout=5)
         runtime.store.close()
+
+
+# -- trace -----------------------------------------------------------------------------------
+
+
+async def test_the_trace_is_opened_with_the_configured_values_and_closed_on_shutdown(
+    farejador_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    respx_mock: respx.MockRouter,
+    tmp_path: Path,
+) -> None:
+    _app_route(respx_mock)
+    path = tmp_path / "trace" / "t.db"
+    runtime = await _build(
+        _settings(
+            monkeypatch,
+            "polling",
+            TRACE_PATH=str(path),
+            TRACE_MAX_ITEM_CHARS="500",
+            MAX_STEPS="9",
+        )
+    )
+    try:
+        assert runtime.trace_store is not None and path.exists()
+        review = runtime.dispatcher._handlers[TriggerKind.FIRST_REVIEW].__self__  # type: ignore[attr-defined]
+        recorder = review._recorder
+        assert recorder._model == "test/model"
+        assert recorder._budgets["max_steps"] == 9
+        assert runtime.trace_store._max_item_chars == 500
+        for closer in runtime.closers:
+            await closer()
+        with pytest.raises(Exception, match="not open"):
+            runtime.trace_store.count_runs()
+    finally:
+        runtime.store.close()
+
+
+async def test_the_trace_can_be_switched_off(
+    farejador_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    respx_mock: respx.MockRouter,
+    tmp_path: Path,
+) -> None:
+    _app_route(respx_mock)
+    path = tmp_path / "off.db"
+    runtime = await _build(
+        _settings(monkeypatch, "polling", TRACE_ENABLED="false", TRACE_PATH=str(path))
+    )
+    try:
+        assert runtime.trace_store is None and not path.exists()
+    finally:
+        runtime.store.close()
+
+
+async def test_an_unusable_trace_file_never_stops_the_service(
+    farejador_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    respx_mock: respx.MockRouter,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _app_route(respx_mock)
+    broken = tmp_path / "trace.db"
+    broken.write_bytes(b"this is not a sqlite database" * 50)
+    runtime = await _build(_settings(monkeypatch, "polling", TRACE_PATH=str(broken)))
+    try:
+        assert runtime.trace_store is None
+        assert runtime.polling is not None  # the service itself is up
+        captured = capsys.readouterr()
+        assert "trace disabled" in captured.out + captured.err
+    finally:
+        runtime.store.close()
+
+
+async def test_running_the_service_purges_old_traces_in_the_background(
+    farejador_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    respx_mock: respx.MockRouter,
+    tmp_path: Path,
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from tests.trace.helpers import begin
+
+    from farejador.trace.store import TraceStore
+
+    _app_route(respx_mock)
+    respx_mock.get(f"{API}/app/installations").mock(return_value=httpx.Response(200, json=[]))
+    old_clock = datetime.now(UTC) - timedelta(days=40)
+    trace_store = TraceStore(tmp_path / "t.db", clock=lambda: old_clock).open()
+    begin(trace_store)
+    trace_store._clock = lambda: datetime.now(UTC)
+    runtime = _bare_runtime(_settings(monkeypatch, "polling"), tmp_path, trace_store=trace_store)
+    stop = asyncio.Event()
+    task = asyncio.create_task(runtime.run(stop))
+    for _ in range(100):
+        await asyncio.sleep(0.02)
+        if trace_store.count_runs() == 0:
+            break
+    stop.set()
+    await asyncio.wait_for(task, timeout=5)
+    try:
+        assert trace_store.count_runs() == 0
+    finally:
+        trace_store.close()
+        runtime.store.close()
+
+
+def test_the_trace_records_the_release_version_when_the_image_sets_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from farejador import __version__
+    from farejador.app import app_version
+
+    monkeypatch.delenv("FAREJADOR_APP_VERSION", raising=False)
+    assert app_version() == __version__  # run from source
+    monkeypatch.setenv("FAREJADOR_APP_VERSION", "")
+    assert app_version() == __version__  # an empty value does not count
+    monkeypatch.setenv("FAREJADOR_APP_VERSION", "0.1.2")
+    assert app_version() == "0.1.2"
+
+
+async def test_the_recorder_gets_the_version_of_the_release(
+    farejador_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    respx_mock: respx.MockRouter,
+    tmp_path: Path,
+) -> None:
+    _app_route(respx_mock)
+    monkeypatch.setenv("FAREJADOR_APP_VERSION", "0.3.4")
+    runtime = await _build(_settings(monkeypatch, "polling", TRACE_PATH=str(tmp_path / "v.db")))
+    try:
+        review = runtime.dispatcher._handlers[TriggerKind.FIRST_REVIEW].__self__  # type: ignore[attr-defined]
+        assert review._recorder._app_version == "0.3.4"
+    finally:
+        for closer in runtime.closers:
+            await closer()
+        runtime.store.close()
