@@ -102,3 +102,41 @@ def test_secrets_are_hidden_in_repr_and_listed_for_redaction(env: pytest.MonkeyP
     assert SECRET_KEY not in repr(settings)
     assert WEBHOOK_SECRET not in repr(settings)
     assert set(settings.secret_values()) == {SECRET_KEY, WEBHOOK_SECRET}
+
+
+def test_trace_settings_have_safe_defaults(env: pytest.MonkeyPatch) -> None:
+    settings = Settings.load()
+    assert settings.trace_enabled is True
+    assert settings.trace_path == Path("/data/trace.db")
+    assert settings.trace_retention_days == 30
+    assert settings.trace_max_item_chars == 20_000
+    assert settings.trace_max_run_bytes == 2 * 1024 * 1024
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("TRACE_RETENTION_DAYS", "0"),
+        ("TRACE_RETENTION_DAYS", "366"),
+        ("TRACE_RETENTION_DAYS", "abc"),
+        ("TRACE_MAX_ITEM_CHARS", "10"),
+        ("TRACE_MAX_RUN_BYTES", "100"),
+        ("TRACE_ENABLED", "maybe"),
+    ],
+)
+def test_invalid_trace_settings_are_rejected_naming_the_variable(
+    env: pytest.MonkeyPatch, name: str, value: str
+) -> None:
+    env.setenv(f"FAREJADOR_{name}", value)
+    with pytest.raises(ConfigError) as error:
+        Settings.load()
+    assert f"FAREJADOR_{name}" in str(error.value)
+
+
+def test_trace_settings_can_be_changed(env: pytest.MonkeyPatch) -> None:
+    env.setenv("FAREJADOR_TRACE_ENABLED", "false")
+    env.setenv("FAREJADOR_TRACE_RETENTION_DAYS", "90")
+    env.setenv("FAREJADOR_TRACE_PATH", "/tmp/x.db")
+    settings = Settings.load()
+    assert (settings.trace_enabled, settings.trace_retention_days) == (False, 90)
+    assert settings.trace_path == Path("/tmp/x.db")

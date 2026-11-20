@@ -80,6 +80,11 @@ Copie `.env.example` para `.env` e preencha. Nunca versione o `.env` nem o arqui
 | `FAREJADOR_MAX_FILES` | não | `40` | Arquivos revisados por pull request |
 | `FAREJADOR_IGNORE_GLOBS` | não | | Padrões extras para ignorar, separados por vírgula |
 | `FAREJADOR_STATE_PATH` | não | `/data/farejador.db` | Arquivo de estado SQLite |
+| `FAREJADOR_TRACE_ENABLED` | não | `true` | Grava o trace de cada revisão (mensagens, ferramentas, achados) |
+| `FAREJADOR_TRACE_PATH` | não | `/data/trace.db` | Arquivo SQLite do trace, separado do estado |
+| `FAREJADOR_TRACE_RETENTION_DAYS` | não | `30` | Dias até a limpeza automática do trace (1 a 365) |
+| `FAREJADOR_TRACE_MAX_ITEM_CHARS` | não | `20000` | Tamanho máximo de cada texto guardado; o excedente é cortado |
+| `FAREJADOR_TRACE_MAX_RUN_BYTES` | não | `2097152` | Teto de bytes de texto por revisão |
 | `FAREJADOR_HOST` / `FAREJADOR_PORT` | não | `127.0.0.1` / `8080` | Endereço do webhook (a imagem Docker usa `0.0.0.0`) |
 | `FAREJADOR_LOG_LEVEL` | não | `INFO` | Nível de log (os logs são JSON na saída padrão) |
 

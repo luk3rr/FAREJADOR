@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from collections.abc import Collection, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from farejador.review.diff import DiffFile
 from farejador.review.findings import Finding
@@ -23,9 +23,20 @@ class Unanchored:
 
 
 @dataclass(frozen=True, slots=True)
+class AnchorDecision:
+    """What became of one finding the model returned (for the trace, FR-4)."""
+
+    finding: Finding
+    disposition: str  # "inline", "summary" or "dropped"
+    reason: str | None = None  # why it did not go inline, with underscores
+    diff_dropped: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class AnchorResult:
     inline: list[Finding]
     unanchored: list[Unanchored]
+    decisions: list[AnchorDecision] = field(default_factory=list)
 
 
 def normalize_path(path: str) -> str:
@@ -50,12 +61,14 @@ def anchor(
     ignored = set(ignored_paths)
     inline: list[Finding] = []
     unanchored: list[Unanchored] = []
+    decisions: list[AnchorDecision] = []
     seen: set[tuple[str, int, str]] = set()
 
     for finding in findings:
         path = finding.file if finding.file in reviewed else normalize_path(finding.file)
         key = (path, finding.line, finding.problem)
         if key in seen:
+            decisions.append(AnchorDecision(finding, "dropped", "duplicate"))
             continue
         seen.add(key)
 
@@ -63,11 +76,22 @@ def anchor(
         if added is None:
             reason = "file-ignored" if path in ignored else "file-not-in-diff"
             unanchored.append(Unanchored(finding, reason))
+            decisions.append(AnchorDecision(finding, "summary", reason.replace("-", "_")))
         elif finding.line not in added:
             unanchored.append(Unanchored(finding, "line-not-added"))
+            decisions.append(AnchorDecision(finding, "summary", "line_not_added"))
         elif len(inline) >= max_inline:
             unanchored.append(Unanchored(finding, "inline-limit"))
+            decisions.append(AnchorDecision(finding, "summary", "inline_limit"))
         else:
             checked = verified_diff(finding.suggestion_diff, by_path[path], finding.line)
             inline.append(finding.model_copy(update={"file": path, "suggestion_diff": checked}))
-    return AnchorResult(inline, unanchored)
+            decisions.append(
+                AnchorDecision(
+                    finding,
+                    "inline",
+                    None,
+                    diff_dropped=bool(finding.suggestion_diff) and not checked,
+                )
+            )
+    return AnchorResult(inline, unanchored, decisions)

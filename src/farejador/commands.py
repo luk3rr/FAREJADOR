@@ -19,9 +19,18 @@ from farejador.github.client import GitHubClient
 from farejador.github.errors import AuthError, GitHubApiError
 from farejador.github.models import ReviewThread
 from farejador.models import Trigger
-from farejador.review.pipeline import FirstReview, PipelineConfig, TokenProvider, WorkspaceOpener
+from farejador.review.pipeline import (
+    FirstReview,
+    PipelineConfig,
+    TokenProvider,
+    WorkspaceOpener,
+    finish_failed,
+    is_public,
+)
 from farejador.review.publisher import PendingThread, Publisher
 from farejador.state.store import StateStore, ThreadStatus, TriggerStatus
+from farejador.trace.recorder import NULL_RUN, NullRecorder, Recorder, RunTrace
+from farejador.trace.store import RunOutcome
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +49,7 @@ class CommandHandler:
         open_workspace: WorkspaceOpener,
         review: FirstReview,
         config: PipelineConfig | None = None,
+        recorder: Recorder | None = None,
     ) -> None:
         self._client = client
         self._token_for = token_for
@@ -48,6 +58,7 @@ class CommandHandler:
         self._publisher = publisher
         self._open_workspace = open_workspace
         self._review = review
+        self._recorder: Recorder = recorder or NullRecorder()
         self._config = config or PipelineConfig()
         self._locks: defaultdict[tuple[str, int], asyncio.Lock] = defaultdict(asyncio.Lock)
 
@@ -79,13 +90,25 @@ class CommandHandler:
             )
             return
 
+        trace: RunTrace = NULL_RUN
         try:
             open_threads = await self._open_bot_threads(trigger)
             resolved = 0
             pending = open_threads
             if open_threads:
-                resolved, pending = await self._reevaluate(trigger, pr.head_sha, open_threads)
+                trace = self._recorder.begin(
+                    trigger_key=trigger.key,
+                    kind="command",
+                    repo=repo,
+                    pr_number=pr.number,
+                    head_sha=pr.head_sha,
+                    repo_public=is_public(pr),
+                )
+                resolved, pending = await self._reevaluate(
+                    trigger, pr.head_sha, open_threads, trace
+                )
         except Exception as exc:
+            finish_failed(trace, exc, started)
             await self._review.report_failure(trigger, pr.head_sha, exc, started)
             raise
 
@@ -144,7 +167,11 @@ class CommandHandler:
         return open_threads
 
     async def _reevaluate(
-        self, trigger: Trigger, head_sha: str, open_threads: list[ReviewThread]
+        self,
+        trigger: Trigger,
+        head_sha: str,
+        open_threads: list[ReviewThread],
+        trace: RunTrace = NULL_RUN,
     ) -> tuple[int, list[ReviewThread]]:
         """Ask the agent about each open thread and resolve those that were fixed."""
         token = await self._token_for(trigger.installation_id)
@@ -155,7 +182,16 @@ class CommandHandler:
                     for t in open_threads
                 ],
                 tools=workspace.tools,
+                trace=trace,
             )
+        trace.finish(
+            outcome=RunOutcome.PARTIAL if run.partial else RunOutcome.COMPLETE,
+            steps=run.steps,
+            tokens=run.tokens,
+            duration_s=run.duration_s,
+            error_category="budget" if run.partial else None,
+            error_message=run.note,
+        )
 
         resolved = 0
         pending: list[ReviewThread] = []

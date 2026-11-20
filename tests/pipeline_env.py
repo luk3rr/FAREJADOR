@@ -23,6 +23,7 @@ from farejador.models import Trigger
 from farejador.review.pipeline import FirstReview, PipelineConfig
 from farejador.review.publisher import Publisher
 from farejador.state.store import StateStore
+from farejador.trace.recorder import Recorder
 from farejador.workspace import Workspace
 
 API = "https://api.github.com"
@@ -51,8 +52,17 @@ index 111..222 100644
 """
 
 
-def pr_json(sha: str, *, draft: bool = False, state: str = "open", title: str = "Add b") -> dict:  # type: ignore[type-arg]
+def pr_json(
+    sha: str,
+    *,
+    draft: bool = False,
+    state: str = "open",
+    title: str = "Add b",
+    repo_private: bool | None = None,
+) -> dict:  # type: ignore[type-arg]
+    base = {} if repo_private is None else {"base": {"repo": {"private": repo_private}}}
     return {
+        **base,
         "number": 1,
         "title": title,
         "draft": draft,
@@ -114,6 +124,8 @@ def build_env(
     config: PipelineConfig | None = None,
     budget: Budget | None = None,
     files: dict[str, str] | None = None,
+    recorder: Recorder | None = None,
+    repo_private: bool | None = None,
 ) -> Env:
     remote = tmp_path / "remote"
     sha = make_repo(remote, files or {"a.py": "def normalize(u):\n    return u\n", "b.py": B_PY})
@@ -122,7 +134,10 @@ def build_env(
     pr_route = router.get(
         f"{API}/repos/{REPO}/pulls/1", headers={"Accept": "application/vnd.github+json"}
     ).mock(
-        return_value=httpx.Response(200, json=pr_json(sha, draft=draft, state=state, title=title))
+        return_value=httpx.Response(
+            200,
+            json=pr_json(sha, draft=draft, state=state, title=title, repo_private=repo_private),
+        )
     )
     diff_route = router.get(
         f"{API}/repos/{REPO}/pulls/1", headers={"Accept": "application/vnd.github.diff"}
@@ -171,6 +186,7 @@ def build_env(
         publisher=publisher,
         open_workspace=open_workspace,
         config=settings,
+        recorder=recorder,
     )
     return Env(
         store=store,

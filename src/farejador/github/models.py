@@ -32,9 +32,12 @@ class PullRequest(_Model):
     head_sha: str
     author_login: str
     html_url: str
+    repo_private: bool | None = None  # None when the API did not say (treated as private)
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> Self:
+        base_repo = (data.get("base") or {}).get("repo") or {}
+        private = base_repo.get("private")
         return cls(
             number=data["number"],
             title=data.get("title", ""),
@@ -43,6 +46,7 @@ class PullRequest(_Model):
             head_sha=data["head"]["sha"],
             author_login=(data.get("user") or {}).get("login", ""),
             html_url=data.get("html_url", ""),
+            repo_private=private if isinstance(private, bool) else None,
         )
 
 

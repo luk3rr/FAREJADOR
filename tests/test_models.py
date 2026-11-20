@@ -77,3 +77,32 @@ def test_repo_must_be_owner_slash_name(repo: str) -> None:
             sender_login="a",
             source=TriggerSource.POLLING,
         )
+
+
+def _pr(**base: object) -> dict[str, object]:
+    return {"number": 1, "head": {"sha": "a" * 40}, **base}
+
+
+def test_the_pull_request_remembers_whether_its_repository_is_private() -> None:
+    from farejador.github.models import PullRequest
+
+    assert PullRequest.from_api(_pr(base={"repo": {"private": False}})).repo_private is False
+    assert PullRequest.from_api(_pr(base={"repo": {"private": True}})).repo_private is True
+
+
+@pytest.mark.parametrize(
+    "base",
+    [
+        None,
+        {},
+        {"repo": None},
+        {"repo": {}},
+        {"repo": {"private": "yes"}},
+        {"repo": {"private": 1}},
+    ],
+)
+def test_a_missing_or_odd_privacy_flag_is_unknown_never_public(base: object) -> None:
+    from farejador.github.models import PullRequest
+
+    data = _pr() if base is None else _pr(base=base)
+    assert PullRequest.from_api(data).repo_private is None

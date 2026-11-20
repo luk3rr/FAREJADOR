@@ -25,8 +25,15 @@ from farejador.models import Trigger
 from farejador.review.diff import DiffFile, parse_diff, render_numbered
 from farejador.review.filters import Masker, check_ignored, mask
 from farejador.review.publisher import Publisher
-from farejador.review.validator import DEFAULT_MAX_INLINE, AnchorResult, anchor
+from farejador.review.validator import (
+    DEFAULT_MAX_INLINE,
+    AnchorDecision,
+    AnchorResult,
+    anchor,
+)
 from farejador.state.store import Outcome, StateStore
+from farejador.trace.recorder import NULL_RUN, NullRecorder, Recorder, RunTrace
+from farejador.trace.store import Disposition, FindingRecord, RunOutcome
 from farejador.workspace import Workspace
 
 logger = logging.getLogger(__name__)
@@ -43,6 +50,57 @@ class PipelineConfig:
     ignore_globs: Sequence[str] = field(default_factory=tuple)
     trigger_text: str = "@farejador"
     bot_login: str | None = None
+
+
+def error_category(error: BaseException) -> str:
+    """The category of a failure as shown in the trace."""
+    if isinstance(error, ModelApiError):
+        return "model_api"
+    if isinstance(error, InvalidModelOutput):
+        return "invalid_output"
+    if isinstance(error, GitHubApiError | AuthError):
+        return "github_api"
+    return "internal"
+
+
+def is_public(pr: PullRequest) -> bool | None:
+    """Whether the repository is public; ``None`` (unknown) is treated as private (FN-3)."""
+    return None if pr.repo_private is None else not pr.repo_private
+
+
+def finish_failed(trace: RunTrace, error: BaseException, started: float) -> None:
+    """Close a trace as failed; never raises."""
+    try:
+        trace.finish(
+            outcome=RunOutcome.FAILED,
+            steps=0,
+            tokens=0,
+            duration_s=time.monotonic() - started,
+            error_category=error_category(error),
+            error_message=str(error)[:500] or type(error).__name__,
+        )
+    except Exception:
+        logger.error("could not close the trace of a failed run")
+
+
+def finding_records(decisions: Sequence[AnchorDecision]) -> list[FindingRecord]:
+    """One trace record per finding the model returned, with its destination and reason."""
+    return [
+        FindingRecord(
+            path=decision.finding.file,
+            line=decision.finding.line,
+            severity=decision.finding.severity.value,
+            category=decision.finding.category.value,
+            problem=decision.finding.problem,
+            rationale=decision.finding.rationale or "",
+            suggestion=decision.finding.suggestion or "",
+            suggestion_diff=decision.finding.suggestion_diff,
+            diff_dropped=decision.diff_dropped,
+            disposition=Disposition(decision.disposition),
+            reason=decision.reason,
+        )
+        for decision in decisions
+    ]
 
 
 def failure_outcome(error: BaseException) -> Outcome:
@@ -67,6 +125,7 @@ class FirstReview:
         publisher: Publisher,
         open_workspace: WorkspaceOpener,
         config: PipelineConfig | None = None,
+        recorder: Recorder | None = None,
     ) -> None:
         self._client = client
         self._token_for = token_for
@@ -75,6 +134,7 @@ class FirstReview:
         self._publisher = publisher
         self._open_workspace = open_workspace
         self._config = config or PipelineConfig()
+        self._recorder: Recorder = recorder or NullRecorder()
 
     async def run(self, trigger: Trigger) -> None:
         """Handle a ``first_review`` trigger; raise ``TriggerSkipped`` when not applicable."""
@@ -87,14 +147,24 @@ class FirstReview:
     async def _execute(self, trigger: Trigger, *, first_review: bool) -> None:
         started = time.monotonic()
         sha = trigger.head_sha or ""
+        trace: RunTrace = NULL_RUN
         try:
             pr = await self._client.get_pr(trigger.installation_id, trigger.repo, trigger.pr_number)
             sha = pr.head_sha
             await self._check_eligible(trigger, pr, first_review=first_review)
-            await self._review(trigger, pr, started)
+            trace = self._recorder.begin(
+                trigger_key=trigger.key,
+                kind="review",
+                repo=trigger.repo,
+                pr_number=pr.number,
+                head_sha=pr.head_sha,
+                repo_public=is_public(pr),
+            )
+            await self._review(trigger, pr, started, trace)
         except TriggerSkipped:
             raise
         except Exception as exc:
+            finish_failed(trace, exc, started)
             await self.report_failure(trigger, sha, exc, started)
             raise
 
@@ -130,7 +200,9 @@ class FirstReview:
                 reviewed.append(diff_file)
         return reviewed, skipped
 
-    async def _review(self, trigger: Trigger, pr: PullRequest, started: float) -> None:
+    async def _review(
+        self, trigger: Trigger, pr: PullRequest, started: float, trace: RunTrace
+    ) -> None:
         installation, repo = trigger.installation_id, trigger.repo
         diff_text = await self._client.get_diff(installation, repo, pr.number)
         reviewed, skipped = self._classify(parse_diff(diff_text))
@@ -146,6 +218,7 @@ class FirstReview:
                     numbered_diff=numbered,
                     skipped=skipped,
                     tools=workspace.tools,
+                    trace=trace,
                 )
             anchored = anchor(
                 run.result.findings,
@@ -153,6 +226,7 @@ class FirstReview:
                 ignored_paths=[path for path, _ in skipped],
                 max_inline=self._config.max_inline,
             )
+            trace.findings(finding_records(anchored.decisions))
 
         summary = run.result.summary if run else ""
         payload = self._publisher.format_review(
@@ -178,6 +252,14 @@ class FirstReview:
                 findings=findings,
                 outcome=outcome,
             )
+        )
+        trace.finish(
+            outcome=RunOutcome.PARTIAL if run and run.partial else RunOutcome.COMPLETE,
+            steps=run.steps if run else 0,
+            tokens=run.tokens if run else 0,
+            duration_s=duration,
+            error_category="budget" if run and run.partial else None,
+            error_message=run.note if run else None,
         )
         await self._register_threads(trigger, pr, run_id)
         log_run(

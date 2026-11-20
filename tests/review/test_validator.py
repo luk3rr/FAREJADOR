@@ -108,3 +108,35 @@ def test_every_inline_comment_is_an_added_line_for_random_inputs() -> None:
             assert finding.line in added[finding.file]
         total_unique = len({(normalize_path(f.file), f.line, f.problem) for f in findings})
         assert len(result.inline) + len(result.unanchored) == total_unique
+
+
+def test_every_finding_gets_a_destination_and_a_reason_for_the_trace() -> None:
+    files = [_file("a.py", [2, 3])]
+    findings = [
+        _finding("a.py", 2, "inline one"),
+        _finding("a.py", 2, "inline one"),  # a duplicate
+        _finding("a.py", 9, "not added"),
+        _finding("ghost.py", 1, "no file"),
+        _finding("c.py", 1, "ignored file"),
+        _finding("a.py", 3, "over the limit"),
+    ]
+    # an ignored file is never in the reviewed list, only in ``ignored_paths``
+    result = anchor(findings, files, ignored_paths=["c.py"], max_inline=1)
+    seen = [(d.finding.problem, d.disposition, d.reason) for d in result.decisions]
+    assert seen == [
+        ("inline one", "inline", None),
+        ("inline one", "dropped", "duplicate"),
+        ("not added", "summary", "line_not_added"),
+        ("no file", "summary", "file_not_in_diff"),
+        ("ignored file", "summary", "file_ignored"),
+        ("over the limit", "summary", "inline_limit"),
+    ]
+    assert len(result.decisions) == len(findings)  # nothing the model said is lost
+
+
+def test_a_suggestion_diff_that_does_not_match_the_code_is_flagged() -> None:
+    finding = _finding("a.py", 2).model_copy(update={"suggestion_diff": "-nada disso\n+x"})
+    (decision,) = anchor([finding], [_file("a.py", [2])]).decisions
+    assert (decision.disposition, decision.diff_dropped) == ("inline", True)
+    clean, *_ = anchor([_finding("a.py", 2)], [_file("a.py", [2])]).decisions
+    assert clean.diff_dropped is False

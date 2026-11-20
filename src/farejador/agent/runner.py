@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import ValidationError
@@ -28,6 +30,10 @@ from farejador.agent.schemas import (
 )
 from farejador.review.findings import ReviewResult
 from farejador.tools import RepoTools, error_json
+from farejador.trace.recorder import NULL_RUN, RunTrace
+from farejador.trace.store import ToolResult
+
+logger = logging.getLogger(__name__)
 
 MAX_TEXT_NUDGES = 2
 MAX_INVALID_SUBMITS = 2
@@ -114,6 +120,7 @@ class AgentRunner:
         numbered_diff: str,
         skipped: Sequence[tuple[str, str]],
         tools: RepoTools,
+        trace: RunTrace | None = None,
     ) -> ReviewRun:
         final = _Final("submit_review", SUBMIT_REVIEW, _validate_review)
         outcome = await self._loop(
@@ -121,6 +128,7 @@ class AgentRunner:
             prompts.review_user_prompt(pr_title, numbered_diff, skipped),
             tools,
             final,
+            trace or NULL_RUN,
         )
         result = outcome.value or ReviewResult(summary="", findings=[])
         return ReviewRun(
@@ -132,7 +140,13 @@ class AgentRunner:
             note=outcome.note,
         )
 
-    async def reevaluate(self, *, threads: Sequence[OpenThread], tools: RepoTools) -> VerdictRun:
+    async def reevaluate(
+        self,
+        *,
+        threads: Sequence[OpenThread],
+        tools: RepoTools,
+        trace: RunTrace | None = None,
+    ) -> VerdictRun:
         expected = {thread.thread_id for thread in threads}
         final = _Final(
             "submit_verdicts", SUBMIT_VERDICTS, lambda raw: _validate_verdicts(raw, expected)
@@ -142,6 +156,7 @@ class AgentRunner:
             prompts.reevaluate_user_prompt(threads),
             tools,
             final,
+            trace or NULL_RUN,
         )
         given: dict[str, ThreadVerdict] = {}
         if outcome.value is not None:
@@ -163,7 +178,9 @@ class AgentRunner:
 
     # -- the loop --------------------------------------------------------------------------
 
-    async def _loop(self, system: str, user: str, tools: RepoTools, final: _Final) -> _Outcome:
+    async def _loop(
+        self, system: str, user: str, tools: RepoTools, final: _Final, trace: RunTrace
+    ) -> _Outcome:
         start = self._clock()
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system},
@@ -171,10 +188,14 @@ class AgentRunner:
         ]
         schemas = [*EXPLORATION_TOOLS, final.schema]
         steps = tokens = nudges = invalid = 0
+        pending = list(messages)  # what the harness added since the last recorded step
+        index = 0
 
         while True:
             reason = self._exhausted(steps, tokens, start)
             response: LLMResponse | None = None
+            step_started = datetime.now(UTC)
+            step_t0 = self._clock()
             if reason is None:
                 remaining = self._budget.max_seconds - (self._clock() - start)
                 try:
@@ -191,17 +212,30 @@ class AgentRunner:
                     reason = "limite de tempo atingido"
             if response is None:
                 return await self._wrap_up(
-                    messages, final, reason or "orçamento esgotado", steps, tokens, start
+                    messages,
+                    final,
+                    reason or "orçamento esgotado",
+                    steps,
+                    tokens,
+                    start,
+                    trace=trace,
+                    pending=pending,
+                    index=index,
                 )
 
             tokens += response.total_tokens
             messages.append(_assistant_message(response))
+            results: list[ToolResult] = []
 
             if not response.tool_calls:
                 nudges += 1
+                self._emit(trace, index, step_started, step_t0, response, pending, results)
                 if nudges > MAX_TEXT_NUDGES:
                     raise InvalidModelOutput("the model did not call a tool to finish")
-                messages.append({"role": "user", "content": _NUDGE.format(name=final.name)})
+                nudge = {"role": "user", "content": _NUDGE.format(name=final.name)}
+                messages.append(nudge)
+                pending = [nudge]
+                index += 1
                 continue
             nudges = 0
 
@@ -209,19 +243,40 @@ class AgentRunner:
                 if call.name == final.name:
                     value, error = final.validate(call.arguments)
                     if error is None:
+                        self._emit(trace, index, step_started, step_t0, response, pending, results)
                         duration = self._clock() - start
                         return _Outcome(value, steps, tokens, duration)
                     invalid += 1
                     if invalid > MAX_INVALID_SUBMITS:
+                        self._emit(trace, index, step_started, step_t0, response, pending, results)
                         raise InvalidModelOutput(f"{final.name} was invalid too many times")
-                    messages.append(_tool_message(call, error_json(error)))
+                    content = error_json(error)
+                    results.append(ToolResult(call.id, call.name, 0.0, content))
+                    messages.append(_tool_message(call, content))
                 else:
+                    tool_t0 = self._clock()
                     if steps >= self._budget.max_steps:
                         content = error_json("orçamento de ferramentas esgotado; conclua agora")
                     else:
                         steps += 1
                         content = await self._run_tool(tools, call)
+                    results.append(ToolResult(call.id, call.name, self._clock() - tool_t0, content))
                     messages.append(_tool_message(call, content))
+            self._emit(trace, index, step_started, step_t0, response, pending, results)
+            pending = []
+            index += 1
+
+    def _emit(
+        self,
+        trace: RunTrace,
+        index: int,
+        started: datetime,
+        t0: float,
+        response: LLMResponse,
+        pending: list[dict[str, Any]],
+        results: list[ToolResult],
+    ) -> None:
+        _record_step(trace, index, started, self._clock() - t0, response, pending, results)
 
     def _exhausted(self, steps: int, tokens: int, start: float) -> str | None:
         if steps >= self._budget.max_steps:
@@ -251,19 +306,26 @@ class AgentRunner:
         steps: int,
         tokens: int,
         start: float,
+        *,
+        trace: RunTrace,
+        pending: list[dict[str, Any]],
+        index: int,
     ) -> _Outcome:
         """One last forced call asking for the final answer with what is already known."""
         note = f"Revisão interrompida antes do fim: {reason}."
-        messages.append(
-            {
-                "role": "user",
-                "content": (
-                    f"Motivo da interrupção: {reason}. Chame {final.name} agora com o que "
-                    "você já sabe. Não peça mais informações."
-                ),
-            }
-        )
+        wrap_message = {
+            "role": "user",
+            "content": (
+                f"Motivo da interrupção: {reason}. Chame {final.name} agora com o que "
+                "você já sabe. Não peça mais informações."
+            ),
+        }
+        messages.append(wrap_message)
+        pending = [*pending, wrap_message]
         value: Any | None = None
+        step_started = datetime.now(UTC)
+        step_t0 = self._clock()
+        response: LLMResponse | None = None
         try:
             response = await asyncio.wait_for(
                 self._llm.complete(
@@ -284,10 +346,40 @@ class AgentRunner:
                     break
         except (TimeoutError, ModelApiError):
             value = None
+        _record_step(trace, index, step_started, self._clock() - step_t0, response, pending, [])
         return _Outcome(value, steps, tokens, self._clock() - start, note)
 
 
 # -- helpers -------------------------------------------------------------------------------
+
+
+def _record_step(
+    trace: RunTrace,
+    index: int,
+    started: datetime,
+    duration_s: float,
+    response: LLMResponse | None,
+    pending: list[dict[str, Any]],
+    results: list[ToolResult],
+) -> None:
+    """Hand one step to the trace; the trace never raises, and a bug here must not either."""
+    try:
+        trace.step(
+            index=index,
+            started_at=started,
+            duration_s=duration_s,
+            tokens=response.total_tokens if response else 0,
+            input_messages=pending,
+            response_content=response.content if response else None,
+            reasoning=response.reasoning if response else None,
+            tool_calls=[
+                {"id": call.id, "name": call.name, "arguments": call.arguments}
+                for call in (response.tool_calls if response else [])
+            ],
+            tool_results=results,
+        )
+    except Exception:
+        logger.error("could not record a trace step")
 
 
 def _assistant_message(response: LLMResponse) -> dict[str, Any]:

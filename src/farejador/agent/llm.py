@@ -34,6 +34,7 @@ class LLMResponse:
     content: str | None
     tool_calls: list[ToolCall] = field(default_factory=list)
     total_tokens: int = 0
+    reasoning: str | None = None
 
 
 class LLMClient(Protocol):
@@ -112,7 +113,21 @@ class OpenRouterClient:
         usage = response.usage.total_tokens if response.usage else None
         if usage is None:
             usage = _estimate_tokens(messages, message.content, calls)
-        return LLMResponse(content=message.content, tool_calls=calls, total_tokens=usage)
+        return LLMResponse(
+            content=message.content,
+            tool_calls=calls,
+            total_tokens=usage,
+            reasoning=_reasoning_of(message),
+        )
+
+
+def _reasoning_of(message: Any) -> str | None:
+    """The reasoning text some providers add to the message, if any (A-6); never requested."""
+    for name in ("reasoning", "reasoning_content"):
+        value = getattr(message, name, None)
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
 
 
 def _estimate_tokens(

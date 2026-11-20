@@ -150,3 +150,42 @@ async def test_a_response_without_choices_is_an_error() -> None:
     client, _ = _client(_json(body))
     with pytest.raises(ModelApiError, match="no choices"):
         await _complete(client)
+
+
+async def test_the_reasoning_of_the_provider_is_captured_when_present() -> None:
+    client, _ = _client(
+        lambda _request: httpx2.Response(
+            200,
+            json=_completion(
+                {"role": "assistant", "content": "ok", "reasoning": "primeiro olho o diff"}
+            ),
+        )
+    )
+    response = await _complete(client)
+    assert response.reasoning == "primeiro olho o diff"
+
+
+async def test_the_reasoning_content_alias_is_also_understood() -> None:
+    client, _ = _client(
+        lambda _request: httpx2.Response(
+            200,
+            json=_completion({"role": "assistant", "content": "ok", "reasoning_content": "alias"}),
+        )
+    )
+    assert (await _complete(client)).reasoning == "alias"
+
+
+@pytest.mark.parametrize("value", [None, "", "   ", 5, ["lista"]])
+async def test_an_absent_or_odd_reasoning_is_none(value: object) -> None:
+    message: dict[str, object] = {"role": "assistant", "content": "ok", "reasoning": value}
+    client, _ = _client(lambda _request: httpx2.Response(200, json=_completion(message)))
+    assert (await _complete(client)).reasoning is None
+
+
+async def test_no_reasoning_field_means_no_reasoning() -> None:
+    client, _ = _client(
+        lambda _request: httpx2.Response(
+            200, json=_completion({"role": "assistant", "content": "ok"})
+        )
+    )
+    assert (await _complete(client)).reasoning is None

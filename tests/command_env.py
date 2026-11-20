@@ -92,6 +92,7 @@ def build_cmd_env(
         open_workspace=env.open_workspace,
         review=env.pipeline,
         config=env.config,
+        recorder=kwargs.get("recorder"),
     )
     return cmd
 

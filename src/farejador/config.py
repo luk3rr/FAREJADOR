@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     max_files: int = Field(default=40, ge=1)
     ignore_globs: Annotated[list[str], NoDecode] = Field(default_factory=list)
     state_path: Path = Path("/data/farejador.db")
+    trace_enabled: bool = True
+    trace_path: Path = Path("/data/trace.db")
+    trace_retention_days: int = Field(default=30, ge=1, le=365)
+    trace_max_item_chars: int = Field(default=20_000, ge=100)
+    trace_max_run_bytes: int = Field(default=2 * 1024 * 1024, ge=10_000)
     host: str = "127.0.0.1"
     port: int = Field(default=8080, ge=1, le=65535)
     log_level: str = "INFO"
