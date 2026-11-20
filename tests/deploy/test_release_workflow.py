@@ -110,9 +110,17 @@ def test_promote_verifies_the_signature_before_moving_stable() -> None:
     assert "--certificate-oidc-issuer https://token.actions.githubusercontent.com" in verify
     move = steps_list[move_index]
     assert (
-        'docker buildx imagetools create --tag "${IMAGE}:stable" "${IMAGE}@${DIGEST}"'
-        in move["run"]
-    )
+        'docker buildx imagetools create --prefer-index=false --tag "${IMAGE}:stable" '
+        '"${IMAGE}@${DIGEST}"'
+    ) in move["run"]
+
+
+def test_stable_must_keep_the_signed_digest_and_the_job_checks_it() -> None:
+    """A re-wrapped manifest has a new digest that nobody signed (found in the first deploy)."""
+    run = next(s for s in steps(JOBS["promote"]) if "imagetools create" in s.get("run", ""))["run"]
+    assert "--prefer-index=false" in run
+    assert "imagetools inspect" in run
+    assert '= "${DIGEST}"' in run
 
 
 def test_the_identity_regex_matches_the_certificate_of_a_real_release() -> None:

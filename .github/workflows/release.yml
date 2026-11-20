@@ -130,4 +130,8 @@ jobs:
       - name: Move stable to the approved digest
         env:
           DIGEST: ${{ needs.publish.outputs.digest }}
-        run: docker buildx imagetools create --tag "${IMAGE}:stable" "${IMAGE}@${DIGEST}"
+        # --prefer-index=false makes a carbon copy: without it a single manifest is wrapped in a new
+        # index, which has a different digest than the one that was signed.
+        run: |
+          docker buildx imagetools create --prefer-index=false --tag "${IMAGE}:stable" "${IMAGE}@${DIGEST}"
+          test "$(docker buildx imagetools inspect "${IMAGE}:stable" --format '{{.Manifest.Digest}}')" = "${DIGEST}"
