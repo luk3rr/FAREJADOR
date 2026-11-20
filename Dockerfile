@@ -24,6 +24,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     FAREJADOR_STATE_PATH=/data/farejador.db \
     FAREJADOR_HOST=0.0.0.0
+LABEL org.opencontainers.image.source="https://github.com/luk3rr/FAREJADOR" \
+      org.opencontainers.image.description="Farejador: agentic first-pass code reviewer for GitHub pull requests"
 USER farejador
 WORKDIR /data
 VOLUME ["/data"]
