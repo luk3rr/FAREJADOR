@@ -160,7 +160,8 @@ Os números que o painel mostra na visão geral, calculados no servidor sobre as
 ### `GET /api/status`
 
 ```json
-{"status": "ok", "trace_available": true, "retention_days": 30, "reviews": 128}
+{"status": "ok", "trace_available": true, "retention_days": 30, "reviews": 128,
+ "app_version": "0.3.1", "started_at": "2026-11-21T00:45:12Z"}
 ```
 
 `reviews` conta só as revisões públicas.

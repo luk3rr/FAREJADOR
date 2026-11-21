@@ -152,11 +152,12 @@ async def api_client(
     *,
     retention_days: int = 30,
     clock: Callable[[], datetime] | None = None,
+    app_version: str = "dev",
 ) -> AsyncIterator[httpx.AsyncClient]:
     api = (
-        create_api(path, retention_days=retention_days)
+        create_api(path, retention_days=retention_days, app_version=app_version)
         if clock is None
-        else create_api(path, retention_days=retention_days, clock=clock)
+        else create_api(path, retention_days=retention_days, app_version=app_version, clock=clock)
     )
     transport = httpx.ASGITransport(app=api)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:

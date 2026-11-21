@@ -58,7 +58,14 @@ def test_the_models_have_exactly_the_contract_fields() -> None:
     assert set(ToolCallOut.model_fields) == {"id", "name", "arguments"}
     assert set(MessageOut.model_fields) == {"role", "content", "tool_call_id"}
     assert set(ErrorOut.model_fields) == {"category", "message"}
-    assert set(StatusOut.model_fields) == {"status", "trace_available", "retention_days", "reviews"}
+    assert set(StatusOut.model_fields) == {
+        "status",
+        "trace_available",
+        "retention_days",
+        "reviews",
+        "app_version",
+        "started_at",
+    }
 
 
 async def test_the_real_responses_match_the_models(tmp_path: Path) -> None:

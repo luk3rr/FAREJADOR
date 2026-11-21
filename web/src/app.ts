@@ -9,6 +9,7 @@ import type { StatusOut } from "./api/types.js";
 import { errorBanner, loadingBlock, notFoundView } from "./components/states.js";
 import { h } from "./dom/vnode.js";
 import type { VElement } from "./dom/vnode.js";
+import { formatDateTime } from "./format.js";
 import type { Route } from "./router.js";
 import { detailView } from "./screens/detail.js";
 import type { DetailResult } from "./screens/detail.js";
@@ -57,6 +58,8 @@ export function statusFooter(status: Loadable<StatusOut>): VElement {
     h("span", {}, `Retenção: ${data.retention_days} dias`),
     h("span", {}, "Somente repositórios públicos"),
     h("span", {}, `${data.reviews.toLocaleString("pt-BR")} revisões públicas`),
+    h("span", {}, `Versão ${data.app_version}`),
+    h("span", { title: data.started_at }, `No ar desde ${formatDateTime(data.started_at)}`),
   );
 }
 

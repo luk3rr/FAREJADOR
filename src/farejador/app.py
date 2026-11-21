@@ -223,7 +223,11 @@ async def build_runtime(
         )
         webhook_app.mount(
             "/api",
-            create_api(settings.trace_path, retention_days=settings.trace_retention_days),
+            create_api(
+                settings.trace_path,
+                retention_days=settings.trace_retention_days,
+                app_version=app_version(),
+            ),
         )
         install_web(webhook_app)
     logger.info(

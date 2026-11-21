@@ -7,7 +7,14 @@ import { test } from "node:test";
 import { ApiError, createClient, isReviewDetail, isReviewList, isStatsOut, isStatusOut } from "../src/api/client.js";
 import type { FetchLike, FetchResponseLike } from "../src/api/client.js";
 
-const STATUS = { status: "ok", trace_available: true, retention_days: 30, reviews: 3 };
+const STATUS = {
+  status: "ok",
+  trace_available: true,
+  retention_days: 30,
+  reviews: 3,
+  app_version: "0.3.1",
+  started_at: "2026-11-21T00:45:12Z",
+};
 
 function answer(status: number, body: unknown): FetchLike {
   return async () => ({ status, json: async () => body }) satisfies FetchResponseLike;
@@ -71,6 +78,9 @@ test("an answer that does not have the expected shape is rejected, never drawn",
     "ok",
     {},
     { ...STATUS, trace_available: "yes" },
+    { ...STATUS, app_version: 31 },
+    { ...STATUS, started_at: null },
+    { status: "ok", trace_available: true, retention_days: 30, reviews: 3 },
     { ...STATUS, retention_days: "30" },
     { status: "ok" },
     { ...STATUS, reviews: null },

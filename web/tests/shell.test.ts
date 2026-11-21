@@ -14,7 +14,14 @@ import { findAll, textOf } from "../src/dom/vnode.js";
 import { allText, fakeFactory } from "./fake-dom.js";
 import type { FakeElement } from "./fake-dom.js";
 
-const STATUS: StatusOut = { status: "ok", trace_available: true, retention_days: 30, reviews: 1280 };
+const STATUS: StatusOut = {
+  status: "ok",
+  trace_available: true,
+  retention_days: 30,
+  reviews: 1280,
+  app_version: "0.3.1",
+  started_at: "2026-11-21T00:45:12Z",
+};
 
 function state(overrides: Partial<AppState> = {}): AppState {
   return {
@@ -133,4 +140,22 @@ test("every error kind has a message in Portuguese", () => {
   for (const kind of kinds) {
     assert.ok(errorMessage(new ApiError(kind)).length > 10, kind);
   }
+});
+
+
+test("the footer says which release is running and since when", () => {
+  const tree = statusFooter({ kind: "ok", data: STATUS });
+  const text = textOf(tree);
+  assert.match(text, /Versão 0\.3\.1/);
+  assert.match(text, /No ar desde \d{2}\/\d{2}\/2026/);
+  const since = findAll(tree, (e) => e.tag === "span" && textOf(e).startsWith("No ar desde"))[0];
+  assert.equal(since?.attrs["title"], "2026-11-21T00:45:12Z", "the exact UTC time is one hover away");
+});
+
+test("a hostile version string is shown as text only", () => {
+  const evil = '<img src=x onerror="alert(1)">';
+  const tree = statusFooter({ kind: "ok", data: { ...STATUS, app_version: evil } });
+  assert.ok(textOf(tree).includes(`Versão ${evil}`));
+  assert.equal(findAll(tree, (e) => e.tag === "img").length, 0);
+  assert.doesNotThrow(() => render(tree, fakeFactory));
 });

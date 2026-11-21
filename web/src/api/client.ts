@@ -63,7 +63,9 @@ export function isStatusOut(value: unknown): value is StatusOut {
     typeof value["status"] === "string" &&
     typeof value["trace_available"] === "boolean" &&
     typeof value["retention_days"] === "number" &&
-    typeof value["reviews"] === "number"
+    typeof value["reviews"] === "number" &&
+    typeof value["app_version"] === "string" &&
+    typeof value["started_at"] === "string"
   );
 }
 

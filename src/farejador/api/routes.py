@@ -154,6 +154,8 @@ class StatusOut(_Out):
     trace_available: bool
     retention_days: int
     reviews: int
+    app_version: str
+    started_at: datetime
 
 
 class StatsTotals(_Out):
@@ -229,6 +231,7 @@ def create_api(
     trace_path: Path | str,
     *,
     retention_days: int = 30,
+    app_version: str = "dev",
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> FastAPI:
     """Build the API app; it opens the trace read-only for each request."""
@@ -241,6 +244,8 @@ def create_api(
         default_response_class=JsonResponse,
     )
     path = Path(trace_path)
+    # The service starts when the image is switched, so this is when the release went live.
+    started_at = _utc(clock())
 
     def connect() -> sqlite3.Connection:
         conn = open_readonly(path)
@@ -377,6 +382,8 @@ def create_api(
             "trace_available": True,
             "retention_days": retention_days,
             "reviews": count,
+            "app_version": app_version,
+            "started_at": started_at,
         }
 
     return api

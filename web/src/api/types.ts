@@ -136,6 +136,8 @@ export interface StatusOut {
   readonly trace_available: boolean;
   readonly retention_days: number;
   readonly reviews: number;
+  readonly app_version: string;
+  readonly started_at: string;
 }
 
 export interface StepOut {

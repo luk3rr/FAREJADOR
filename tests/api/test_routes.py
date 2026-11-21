@@ -175,7 +175,8 @@ async def test_the_status_counts_only_public_runs(tmp_path: Path) -> None:
     seeded = seed(tmp_path)
     async with api_client(seeded.path, retention_days=45) as client:
         body = (await client.get("/status")).json()
-    assert body == {"status": "ok", "trace_available": True, "retention_days": 45, "reviews": 3}
+    assert body["status"] == "ok" and body["trace_available"] is True
+    assert (body["retention_days"], body["reviews"]) == (45, 3)
 
 
 @pytest.mark.parametrize("path", ["/reviews", "/reviews/1", "/status"])
@@ -331,3 +332,17 @@ async def test_the_openapi_schema_describes_exactly_the_four_routes(tmp_path: Pa
     assert set(schema["paths"]) == {"/reviews", "/reviews/{review_id}", "/stats", "/status"}
     assert {m for p in schema["paths"].values() for m in p} == {"get"}  # HEAD is implied
     assert json.dumps(schema)  # serializable
+
+
+async def test_the_status_tells_which_release_is_running_and_since_when(tmp_path: Path) -> None:
+    from datetime import UTC, datetime
+
+    started = datetime(2026, 11, 21, 0, 45, 12, tzinfo=UTC)
+    async with api_client(
+        seed(tmp_path).path, app_version="0.3.1", clock=lambda: started
+    ) as client:
+        first = (await client.get("/status")).json()
+        second = (await client.get("/status")).json()
+    assert first["app_version"] == "0.3.1"
+    assert first["started_at"] == "2026-11-21T00:45:12Z"
+    assert second["started_at"] == first["started_at"], "fixed when the service starts"
