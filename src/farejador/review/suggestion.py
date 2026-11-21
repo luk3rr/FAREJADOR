@@ -30,7 +30,9 @@ def _parse(raw: str, *, strip_space: bool) -> list[tuple[str, str]] | None:
             continue
         marker, text = line[0], line[1:]
         if marker not in _MARKERS:
-            return None
+            # a context line written without its leading space; whether it is real code is
+            # checked against the file, so a made-up line is still rejected
+            marker, text = " ", line
         if strip_space and marker != " " and text.startswith(" "):
             text = text[1:]
         parsed.append((marker, text))

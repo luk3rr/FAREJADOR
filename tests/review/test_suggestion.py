@@ -120,3 +120,28 @@ def test_the_anchor_step_keeps_a_verified_diff_and_drops_an_invented_one() -> No
     assert by_line[12].suggestion_diff is None
     # the comment itself is still posted; only the unreliable code block is removed
     assert by_line[12].suggestion == "s"
+
+
+def test_a_diff_that_starts_with_a_context_line_keeps_its_first_line() -> None:
+    """The model's text is not stripped: a leading space is the marker of a context line."""
+    finding = Finding(
+        file="a.py",
+        line=12,
+        severity=Severity.LOW,
+        category=Category.OTHER,
+        problem="p",
+        suggestion_diff="     soma = 0\n+    soma = 1\n     for item in items:",
+    )
+    assert finding.suggestion_diff is not None
+    assert finding.suggestion_diff.startswith("     soma = 0")
+    assert verified_diff(finding.suggestion_diff, _file(), 12) == finding.suggestion_diff
+
+
+def test_a_context_line_written_without_its_space_is_still_accepted_when_it_exists() -> None:
+    """Top-level code has no indentation, so a missing marker leaves nothing to tell it apart."""
+    raw = "def total(items):\n+    soma = 1"
+    assert verified_diff(raw, _file(), 10) == " def total(items):\n+    soma = 1"
+
+
+def test_an_unmarked_line_that_is_not_in_the_file_still_drops_the_diff() -> None:
+    assert verified_diff("invented line\n+    x = 1", _file(), 11) is None

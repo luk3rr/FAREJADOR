@@ -7,8 +7,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 MAX_PROBLEM = 500
 MAX_RATIONALE = 1500
@@ -50,7 +51,10 @@ class Finding(BaseModel):
     problem: str = Field(min_length=1, max_length=MAX_PROBLEM)
     rationale: str | None = Field(default=None, max_length=MAX_RATIONALE)
     suggestion: str | None = Field(default=None, max_length=MAX_SUGGESTION)
-    suggestion_diff: str | None = Field(default=None, max_length=MAX_DIFF)
+    # Whitespace is part of a diff: the first line may be context, which starts with a space.
+    suggestion_diff: Annotated[
+        str | None, StringConstraints(strip_whitespace=False, max_length=MAX_DIFF)
+    ] = None
 
 
 class ReviewResult(BaseModel):
