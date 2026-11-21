@@ -64,7 +64,7 @@ export function sidebar(state: AppState): VElement {
   return h(
     "nav",
     { class: "sidebar", "aria-label": "Navegação principal" },
-    h("div", { class: "brand" }, h("img", { src: "/assets/icon.png", alt: "", width: 34, height: 34 }), h("span", {}, "Farejador")),
+    h("div", { class: "brand" }, h("img", { src: "/assets/icon.png", alt: "", width: 96, height: 96 }), h("span", {}, "Farejador")),
     NAV.map((item) =>
       h(
         "a",
