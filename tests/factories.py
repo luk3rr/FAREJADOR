@@ -4,6 +4,8 @@
 
 """Small builders shared by the tests."""
 
+from collections.abc import Mapping
+
 from farejador.models import Trigger, TriggerSource
 
 
@@ -34,11 +36,15 @@ class FakeAuth:
     def __init__(self) -> None:
         self.version = 1
         self.invalidated: list[int] = []
+        self.requested: list[dict[str, str] | None] = []
 
     def app_jwt(self) -> str:
         return "app-jwt"
 
-    async def token_for(self, installation_id: int) -> str:
+    async def token_for(
+        self, installation_id: int, permissions: Mapping[str, str] | None = None
+    ) -> str:
+        self.requested.append(dict(permissions) if permissions else None)
         return f"token-{installation_id}-v{self.version}"
 
     def invalidate(self, installation_id: int) -> None:

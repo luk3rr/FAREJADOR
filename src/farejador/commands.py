@@ -203,8 +203,12 @@ class CommandHandler:
                 continue
             try:
                 await self._client.resolve_review_thread(trigger.installation_id, thread.id)
-            except (GitHubApiError, AuthError):
-                logger.warning("could not resolve a thread", extra={"thread_id": thread.id})
+            except (GitHubApiError, AuthError) as exc:
+                # GitHub's own message says why (permission, state); it carries no secret
+                logger.warning(
+                    "could not resolve a thread",
+                    extra={"thread_id": thread.id, "reason": str(exc)[:300]},
+                )
                 pending.append(thread)
                 continue
             await asyncio.to_thread(self._store.set_thread_status, thread.id, ThreadStatus.RESOLVED)

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from typing import Protocol
 
@@ -16,6 +16,21 @@ import httpx
 import jwt
 
 from farejador.github.errors import AuthError
+
+# Installation tokens are narrowed to what each use needs, so a token that clones code cannot write
+# it. ``contents: write`` exists only for resolving review threads, which GitHub requires it for.
+CLONE_PERMISSIONS: Mapping[str, str] = {"contents": "read", "metadata": "read"}
+API_PERMISSIONS: Mapping[str, str] = {
+    "contents": "read",
+    "issues": "write",
+    "pull_requests": "write",
+    "metadata": "read",
+}
+RESOLVE_PERMISSIONS: Mapping[str, str] = {
+    "contents": "write",
+    "pull_requests": "write",
+    "metadata": "read",
+}
 
 _JWT_TTL_S = 9 * 60
 _JWT_BACKDATE_S = 60
@@ -28,13 +43,29 @@ class GitHubAuth(Protocol):
         """A short-lived token that identifies the App itself."""
         ...
 
-    async def token_for(self, installation_id: int) -> str:
-        """A valid installation token, renewed transparently when it is about to expire."""
+    async def token_for(
+        self, installation_id: int, permissions: Mapping[str, str] | None = None
+    ) -> str:
+        """A valid installation token, renewed transparently when it is about to expire.
+
+        ``permissions`` narrows the token to those permissions; None means all the App has.
+        """
         ...
 
     def invalidate(self, installation_id: int) -> None:
         """Forget a cached installation token that GitHub rejected."""
         ...
+
+
+_Key = tuple[int, tuple[tuple[str, str], ...]]
+
+
+def _reason(response: httpx.Response) -> str:
+    """GitHub's own explanation of a refusal; it never contains the token."""
+    try:
+        return str(response.json().get("message", response.reason_phrase))[:200]
+    except (ValueError, AttributeError):
+        return response.reason_phrase
 
 
 class AppAuth:
@@ -56,8 +87,8 @@ class AppAuth:
         self._base_url = base_url.rstrip("/")
         self._clock = clock
         self._margin = renew_margin_s
-        self._cache: dict[int, tuple[str, float]] = {}
-        self._locks: dict[int, asyncio.Lock] = {}
+        self._cache: dict[_Key, tuple[str, float]] = {}
+        self._locks: dict[_Key, asyncio.Lock] = {}
 
     def app_jwt(self) -> str:
         now = int(self._clock())
@@ -72,22 +103,28 @@ class AppAuth:
             raise AuthError("could not sign the GitHub App JWT; check the private key") from exc
 
     def invalidate(self, installation_id: int) -> None:
-        self._cache.pop(installation_id, None)
+        for key in [key for key in self._cache if key[0] == installation_id]:
+            del self._cache[key]
 
-    async def token_for(self, installation_id: int) -> str:
-        cached = self._cache.get(installation_id)
+    async def token_for(
+        self, installation_id: int, permissions: Mapping[str, str] | None = None
+    ) -> str:
+        key: _Key = (installation_id, tuple(sorted((permissions or {}).items())))
+        cached = self._cache.get(key)
         if cached is not None and cached[1] - self._margin > self._clock():
             return cached[0]
-        lock = self._locks.setdefault(installation_id, asyncio.Lock())
+        lock = self._locks.setdefault(key, asyncio.Lock())
         async with lock:
-            cached = self._cache.get(installation_id)
+            cached = self._cache.get(key)
             if cached is not None and cached[1] - self._margin > self._clock():
                 return cached[0]
-            token, expires_at = await self._fetch(installation_id)
-            self._cache[installation_id] = (token, expires_at)
+            token, expires_at = await self._fetch(installation_id, permissions)
+            self._cache[key] = (token, expires_at)
             return token
 
-    async def _fetch(self, installation_id: int) -> tuple[str, float]:
+    async def _fetch(
+        self, installation_id: int, permissions: Mapping[str, str] | None
+    ) -> tuple[str, float]:
         response = await self._http.post(
             f"{self._base_url}/app/installations/{installation_id}/access_tokens",
             headers={
@@ -95,9 +132,13 @@ class AppAuth:
                 "Accept": "application/vnd.github+json",
                 "X-GitHub-Api-Version": "2022-11-28",
             },
+            json={"permissions": dict(permissions)} if permissions else None,
         )
         if response.status_code != 201:
-            raise AuthError(f"could not obtain an installation token (HTTP {response.status_code})")
+            raise AuthError(
+                f"could not obtain an installation token (HTTP {response.status_code}): "
+                f"{_reason(response)}"
+            )
         data = response.json()
         try:
             token = str(data["token"])

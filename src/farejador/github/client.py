@@ -7,14 +7,14 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
 from farejador.github import graphql
-from farejador.github.auth import GitHubAuth
+from farejador.github.auth import API_PERMISSIONS, RESOLVE_PERMISSIONS, GitHubAuth
 from farejador.github.errors import AuthError, GitHubApiError
 from farejador.github.models import (
     Installation,
@@ -91,13 +91,14 @@ class GitHubClient:
         json: Any = None,
         params: dict[str, Any] | None = None,
         etag: str | None = None,
+        permissions: Mapping[str, str] | None = None,
     ) -> httpx.Response:
         url = path if path.startswith("http") else f"{self._base_url}{path}"
         for auth_attempt in range(2):
             token = (
                 self._auth.app_jwt()
                 if installation_id is None
-                else await self._auth.token_for(installation_id)
+                else await self._auth.token_for(installation_id, permissions or API_PERMISSIONS)
             )
             headers = {
                 "Authorization": f"Bearer {token}",
@@ -296,13 +297,19 @@ class GitHubClient:
     # -- graphql -----------------------------------------------------------
 
     async def _graphql(
-        self, installation_id: int, query: str, variables: dict[str, Any]
+        self,
+        installation_id: int,
+        query: str,
+        variables: dict[str, Any],
+        *,
+        permissions: Mapping[str, str] | None = None,
     ) -> dict[str, Any]:
         response = await self._call(
             "POST",
             "/graphql",
             installation_id=installation_id,
             json={"query": query, "variables": variables},
+            permissions=permissions,
         )
         body = response.json()
         if body.get("errors"):
@@ -330,7 +337,13 @@ class GitHubClient:
             cursor = page["pageInfo"]["endCursor"]
 
     async def resolve_review_thread(self, installation_id: int, thread_id: str) -> None:
-        await self._graphql(installation_id, graphql.RESOLVE_THREAD, {"threadId": thread_id})
+        # GitHub only lets an App resolve a thread with contents: write; no other call gets it
+        await self._graphql(
+            installation_id,
+            graphql.RESOLVE_THREAD,
+            {"threadId": thread_id},
+            permissions=RESOLVE_PERMISSIONS,
+        )
 
 
 async def resolve_bot_login(client: GitHubClient, override: str | None = None) -> str:

@@ -49,8 +49,11 @@ flowchart LR
 ## 1. Registrar o GitHub App
 
 1. GitHub → Settings → Developer settings → GitHub Apps → **New GitHub App**.
-2. **Permissões** (repositório): *Contents* somente leitura, *Issues* leitura e escrita,
-   *Pull requests* leitura e escrita, *Metadata* somente leitura.
+2. **Permissões** (repositório): *Contents* leitura e escrita, *Issues* leitura e escrita,
+   *Pull requests* leitura e escrita, *Metadata* somente leitura. O *Contents* de escrita existe só
+   porque o GitHub o exige para **resolver threads de revisão**; o Farejador nunca escreve no código:
+   o token que clona o repositório é pedido só com leitura, e o de escrita só é usado ao resolver
+   um thread. Sem essa permissão, o bot revisa normalmente, mas não consegue resolver os threads.
 3. **Eventos assinados**: *Pull request* e *Issue comment*.
 4. **Webhook**: necessário só no modo webhook. Informe a URL do seu servidor
    (`https://seu-host/webhook`) e um **segredo** longo e aleatório. Para polling, o webhook pode

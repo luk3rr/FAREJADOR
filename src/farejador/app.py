@@ -28,7 +28,7 @@ from farejador.api.routes import create_api
 from farejador.commands import CommandHandler
 from farejador.config import ConfigError, Mode, Settings
 from farejador.dispatcher import Dispatcher
-from farejador.github.auth import AppAuth
+from farejador.github.auth import CLONE_PERMISSIONS, AppAuth
 from farejador.github.client import GitHubClient, resolve_bot_login
 from farejador.log import configure_logging
 from farejador.models import TriggerKind
@@ -166,9 +166,14 @@ async def build_runtime(
         trigger_text=settings.trigger_text,
         bot_login=bot_login,
     )
+
+    async def clone_token(installation_id: int) -> str:
+        """The token that clones the code: it can read contents and nothing else."""
+        return await auth.token_for(installation_id, CLONE_PERMISSIONS)
+
     review = FirstReview(
         client=client,
-        token_for=auth.token_for,
+        token_for=clone_token,
         store=store,
         runner=runner,
         publisher=publisher,
@@ -178,7 +183,7 @@ async def build_runtime(
     )
     commands = CommandHandler(
         client=client,
-        token_for=auth.token_for,
+        token_for=clone_token,
         store=store,
         runner=runner,
         publisher=publisher,

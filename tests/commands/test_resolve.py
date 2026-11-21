@@ -4,6 +4,7 @@
 
 from pathlib import Path
 
+import pytest
 import respx
 from tests.command_env import build_cmd_env, thread_node
 from tests.llm_fakes import call, reply, submit_review
@@ -85,3 +86,20 @@ async def test_a_partial_reevaluation_never_resolves_threads_without_a_verdict(
     assert cmd.resolved_ids == []
     assert cmd.env.review_route.call_count == 0
     assert submit_review is not None
+
+
+async def test_a_resolve_failure_logs_the_reason_github_gave(
+    tmp_path: Path, respx_mock: respx.MockRouter, caplog: pytest.LogCaptureFixture
+) -> None:
+    cmd = build_cmd_env(
+        tmp_path,
+        respx_mock,
+        [reply(_verdicts(("T1", True)))],
+        threads=[thread_node("T1")],
+    )
+    cmd.failing_ids.add("T1")
+    with caplog.at_level("WARNING", logger="farejador.commands"):
+        await cmd.handler.run(cmd.trigger())
+    record = next(r for r in caplog.records if r.getMessage() == "could not resolve a thread")
+    assert record.thread_id == "T1"  # type: ignore[attr-defined]
+    assert "cannot resolve" in record.reason  # type: ignore[attr-defined]
