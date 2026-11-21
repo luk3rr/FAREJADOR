@@ -52,3 +52,6 @@ web/node_modules/
 web/dist/
 web/.test-build/
 src/farejador/web/static/
+
+# Local architecture notes
+docs/arquitetura.md
