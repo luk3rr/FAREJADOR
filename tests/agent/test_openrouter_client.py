@@ -189,3 +189,23 @@ async def test_no_reasoning_field_means_no_reasoning() -> None:
         )
     )
     assert (await _complete(client)).reasoning is None
+
+
+async def test_the_reasoning_effort_is_sent_only_when_configured() -> None:
+    message = {"role": "assistant", "content": "ok"}
+    client, seen = _client(_json(_completion(message)))
+    await _complete(client)
+    assert "reasoning" not in json.loads(seen[0].content)
+
+    seen_effort: list[httpx2.Request] = []
+
+    def record(request: httpx2.Request) -> httpx2.Response:
+        seen_effort.append(request)
+        return httpx2.Response(200, json=_completion(message))
+
+    http = httpx2.AsyncClient(transport=httpx2.MockTransport(record))
+    configured = OpenRouterClient(
+        API_KEY, http_client=http, max_retries=0, reasoning_effort="xhigh"
+    )
+    await _complete(configured)
+    assert json.loads(seen_effort[0].content)["reasoning"] == {"effort": "xhigh"}

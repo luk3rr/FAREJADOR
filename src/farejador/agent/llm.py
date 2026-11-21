@@ -63,7 +63,9 @@ class OpenRouterClient:
         http_client: httpx2.AsyncClient | None = None,
         max_retries: int = 2,
         timeout_s: float = 120.0,
+        reasoning_effort: str | None = None,
     ) -> None:
+        self._reasoning_effort = reasoning_effort
         self._client = AsyncOpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -95,6 +97,9 @@ class OpenRouterClient:
         }
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens
+        if self._reasoning_effort is not None:
+            # OpenRouter's unified switch; providers that cannot reason ignore it.
+            kwargs["extra_body"] = {"reasoning": {"effort": self._reasoning_effort}}
         try:
             response = await self._client.chat.completions.create(**kwargs)
         except openai.APIStatusError as exc:
@@ -122,7 +127,7 @@ class OpenRouterClient:
 
 
 def _reasoning_of(message: Any) -> str | None:
-    """The reasoning text some providers add to the message, if any (A-6); never requested."""
+    """The reasoning text some providers add to the message, if any (A-6)."""
     for name in ("reasoning", "reasoning_content"):
         value = getattr(message, name, None)
         if isinstance(value, str) and value.strip():

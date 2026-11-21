@@ -86,18 +86,19 @@ def test_inline_comment_follows_the_problem_rationale_suggestion_structure() -> 
         "<details>\n<summary><strong>Racional</strong></summary>\n\n"
         "Mudanças em uma parte obrigam a reler a outra e elevam o risco.\n\n"
         "</details>\n\n"
-        "<details>\n<summary><strong>Sugestão</strong></summary>\n\n"
+        "<details open>\n<summary><strong>Sugestão</strong></summary>\n\n"
         "Separe a validação em uma função própria.\n\n"
         "```diff\n-    valida_e_salva(dados)\n+    valida(dados)\n+    salva(dados)\n```\n\n"
         "</details>"
     )
 
 
-def test_the_collapsible_sections_are_closed_by_default() -> None:
+def test_the_rationale_is_collapsed_and_the_suggestion_is_open_by_default() -> None:
     text = _publisher().format_inline(_finding(rationale="Porque sim.", suggestion="Faça assim."))
-    assert "<details>" in text
-    assert "<details open" not in text
-    assert text.count("<details>") == 2
+    assert "<details>\n<summary><strong>Racional</strong>" in text
+    assert "<details open>\n<summary><strong>Sugestão</strong>" in text
+    assert text.count("<details>") == 1
+    assert text.count("<details open>") == 1
     assert text.count("</details>") == 2
 
 
@@ -136,9 +137,9 @@ def test_html_from_the_model_cannot_break_out_of_the_sections() -> None:
     )
     assert "<script>" not in text
     assert "<img" not in text
-    assert text.count("<details>") == 2
-    assert text.count("</details>") == 2  # only the ones the Publisher wrote
-    assert "<details open>" not in text
+    assert text.count("<details>") == 1  # only the ones the Publisher wrote
+    assert text.count("<details open>") == 1
+    assert text.count("</details>") == 2
 
 
 def test_secrets_echoed_in_the_diff_or_the_text_are_masked() -> None:

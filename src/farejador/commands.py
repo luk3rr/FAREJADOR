@@ -90,6 +90,7 @@ class CommandHandler:
             )
             return
 
+        await self._publisher.acknowledge(installation, repo, pr.number)
         trace: RunTrace = NULL_RUN
         try:
             open_threads = await self._open_bot_threads(trigger)

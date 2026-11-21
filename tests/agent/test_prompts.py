@@ -83,3 +83,10 @@ def test_the_prompt_tells_the_model_what_the_masking_marker_means() -> None:
         assert "segredo escrito no código" in system
         assert "severity high, category security" in system
         assert "nunca trate o marcador como código" in system
+
+
+def test_the_review_prompt_asks_for_depth_edge_cases_and_a_diff_in_every_fix() -> None:
+    text = prompts.review_system_prompt()
+    assert "não pare no primeiro achado" in text
+    assert "entradas de borda" in text
+    assert "inclua SEMPRE" in text

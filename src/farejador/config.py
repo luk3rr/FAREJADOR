@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     bot_login: str | None = None
     poll_interval_s: int = Field(default=60, ge=5)
     workers: int = Field(default=2, ge=1, le=16)
+    reasoning_effort: Literal["minimal", "low", "medium", "high", "xhigh"] | None = None
     max_steps: int = Field(default=15, ge=1)
     max_tokens: int = Field(default=200_000, ge=1_000)
     max_seconds: int = Field(default=300, ge=10)

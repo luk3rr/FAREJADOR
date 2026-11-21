@@ -77,6 +77,7 @@ Copie `.env.example` para `.env` e preencha. Nunca versione o `.env` nem o arqui
 | `FAREJADOR_MAX_STEPS` | não | `15` | Chamadas de ferramenta por revisão |
 | `FAREJADOR_MAX_TOKENS` | não | `200000` | Tokens por revisão |
 | `FAREJADOR_MAX_SECONDS` | não | `300` | Tempo máximo por revisão |
+| `FAREJADOR_REASONING_EFFORT` | não | _(não enviado)_ | Esforço de raciocínio pedido ao modelo: `minimal`, `low`, `medium`, `high` ou `xhigh` (provedores sem raciocínio ignoram) |
 | `FAREJADOR_MAX_FILES` | não | `40` | Arquivos revisados por pull request |
 | `FAREJADOR_IGNORE_GLOBS` | não | | Padrões extras para ignorar, separados por vírgula |
 | `FAREJADOR_STATE_PATH` | não | `/data/farejador.db` | Arquivo de estado SQLite |

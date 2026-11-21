@@ -160,7 +160,10 @@ class FirstReview:
                 head_sha=pr.head_sha,
                 repo_public=is_public(pr),
             )
-            await self._review(trigger, pr, started, trace)
+            eyes = await self._publisher.acknowledge(
+                trigger.installation_id, trigger.repo, pr.number
+            )
+            await self._review(trigger, pr, started, trace, eyes)
         except TriggerSkipped:
             raise
         except Exception as exc:
@@ -201,7 +204,12 @@ class FirstReview:
         return reviewed, skipped
 
     async def _review(
-        self, trigger: Trigger, pr: PullRequest, started: float, trace: RunTrace
+        self,
+        trigger: Trigger,
+        pr: PullRequest,
+        started: float,
+        trace: RunTrace,
+        received_id: int | None = None,
     ) -> None:
         installation, repo = trigger.installation_id, trigger.repo
         diff_text = await self._client.get_diff(installation, repo, pr.number)
@@ -239,6 +247,11 @@ class FirstReview:
         await self._publisher.post_review(
             installation, repo, pr.number, commit_sha=pr.head_sha, payload=payload
         )
+        # a complete review that found nothing says so in a comment of its own, then the eyes
+        # (received) are swapped for a rocket and a thumbs up
+        nothing_found = run is not None and not run.partial and not run.result.findings
+        if nothing_found and await self._publisher.post_lgtm(installation, repo, pr.number):
+            await self._publisher.celebrate(installation, repo, pr.number, received_id)
 
         outcome = Outcome.PARTIAL if run and run.partial else Outcome.DONE
         findings = len(anchored.inline) + len(anchored.unanchored)

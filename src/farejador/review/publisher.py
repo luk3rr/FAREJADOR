@@ -45,6 +45,9 @@ class PendingThread:
     body: str
 
 
+LGTM_COMMENT = "LGTM 👍🐶"
+RECEIVED = "eyes"
+DONE = ("rocket", "+1")
 MAX_PENDING_SHOWN = 10
 MAX_PENDING_PREVIEW = 120
 
@@ -71,9 +74,10 @@ def _preview_line(body: str) -> str:
     return lines[0] if lines else ""
 
 
-def _collapsible(title: str, markdown: str) -> str:
+def _collapsible(title: str, markdown: str, *, opened: bool = False) -> str:
     """A GitHub ``<details>`` block; blank lines let the Markdown inside render."""
-    return f"<details>\n<summary><strong>{title}</strong></summary>\n\n{markdown}\n\n</details>"
+    tag = "<details open>" if opened else "<details>"
+    return f"{tag}\n<summary><strong>{title}</strong></summary>\n\n{markdown}\n\n</details>"
 
 
 def _diff_block(diff: str) -> str:
@@ -119,7 +123,7 @@ class Publisher:
             block = _diff_block(mask(finding.suggestion_diff))
             body = f"{suggestion}\n\n{block}" if suggestion else block
         if body:
-            parts += ["", _collapsible("Sugestão", body)]
+            parts += ["", _collapsible("Sugestão", body, opened=True)]
         return "\n".join(parts)
 
     def format_review(
@@ -177,6 +181,10 @@ class Publisher:
         ]
         return ReviewPayload(body, comments)
 
+    def format_lgtm(self) -> str:
+        """The separate comment posted when the model found nothing to fix."""
+        return LGTM_COMMENT
+
     def format_status(
         self, *, resolved: int, pending: Sequence[PendingThread], trigger_text: str
     ) -> str:
@@ -231,6 +239,35 @@ class Publisher:
 
     async def post_comment(self, installation_id: int, repo: str, pr_number: int, body: str) -> int:
         return await self._client.post_comment(installation_id, repo, pr_number, body)
+
+    async def post_lgtm(self, installation_id: int, repo: str, pr_number: int) -> bool:
+        """Post the LGTM comment; failing to post it is logged and never fails the review."""
+        try:
+            await self._client.post_comment(installation_id, repo, pr_number, self.format_lgtm())
+        except (GitHubApiError, AuthError):
+            logger.warning("could not post the LGTM comment", extra={"repo": repo})
+            return False
+        return True
+
+    async def acknowledge(self, installation_id: int, repo: str, pr_number: int) -> int | None:
+        """React with eyes to say the request arrived; returns the reaction id, or None."""
+        try:
+            return await self._client.add_reaction(installation_id, repo, pr_number, RECEIVED)
+        except (GitHubApiError, AuthError):
+            logger.warning("could not add the received reaction", extra={"repo": repo})
+            return None
+
+    async def celebrate(
+        self, installation_id: int, repo: str, pr_number: int, received_id: int | None
+    ) -> None:
+        """Swap the eyes for a rocket and a thumbs up; every step is best effort."""
+        try:
+            if received_id is not None:
+                await self._client.delete_reaction(installation_id, repo, pr_number, received_id)
+            for content in DONE:
+                await self._client.add_reaction(installation_id, repo, pr_number, content)
+        except (GitHubApiError, AuthError):
+            logger.warning("could not update the reactions", extra={"repo": repo})
 
     async def post_notice(
         self,

@@ -37,6 +37,7 @@ def test_defaults_match_contract(env: pytest.MonkeyPatch) -> None:
     assert settings.state_path == Path("/data/farejador.db")
     assert (settings.host, settings.port) == ("127.0.0.1", 8080)
     assert settings.ignore_globs == []
+    assert settings.reasoning_effort is None
 
 
 def test_missing_required_variable_names_it_only(env: pytest.MonkeyPatch) -> None:
@@ -140,3 +141,11 @@ def test_trace_settings_can_be_changed(env: pytest.MonkeyPatch) -> None:
     settings = Settings.load()
     assert (settings.trace_enabled, settings.trace_retention_days) == (False, 90)
     assert settings.trace_path == Path("/tmp/x.db")
+
+
+def test_reasoning_effort_accepts_the_known_levels_only(env: pytest.MonkeyPatch) -> None:
+    env.setenv("FAREJADOR_REASONING_EFFORT", "xhigh")
+    assert Settings.load().reasoning_effort == "xhigh"
+    env.setenv("FAREJADOR_REASONING_EFFORT", "max")
+    with pytest.raises(Exception):  # noqa: B017  (the loader wraps validation errors)
+        Settings.load()

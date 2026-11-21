@@ -220,7 +220,7 @@ async def test_a_thread_listing_failure_does_not_fail_the_review(
     trigger = env.trigger()
     await env.pipeline.run(trigger)
     assert env.review_route.call_count == 1
-    assert env.comment_route.call_count == 0
+    assert env.comment_route.call_count == 1  # the LGTM: nothing was found
     assert env.store.has_review_run("o/r", 1) is True
 
 
@@ -269,3 +269,99 @@ async def test_an_invented_diff_is_dropped_but_the_comment_and_explanation_stay(
     assert "Proteja a chamada contra None." in comment["body"]
     assert "```diff" not in comment["body"]
     assert "codigo_que_nao_existe" not in comment["body"]
+
+
+async def test_a_review_that_found_nothing_posts_a_separate_lgtm_comment(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    env = build_env(tmp_path, respx_mock, [reply(submit_review())])
+    await env.pipeline.run(env.trigger())
+    assert env.review_route.call_count == 1
+    assert env.comment_route.call_count == 1
+    assert json.loads(env.comment_route.calls.last.request.content)["body"] == "LGTM 👍🐶"
+
+
+async def test_no_lgtm_when_the_review_has_findings(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    env = build_env(tmp_path, respx_mock, [reply(submit_review([finding("b.py", 2)]))])
+    await env.pipeline.run(env.trigger())
+    assert env.comment_route.call_count == 0
+
+
+async def test_no_lgtm_when_the_run_was_cut_short(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    from farejador.agent.runner import Budget
+
+    env = build_env(
+        tmp_path,
+        respx_mock,
+        [reply(call("list_dir", {}, "c1")), reply(submit_review())],
+        budget=Budget(max_steps=1),
+    )
+    await env.pipeline.run(env.trigger())
+    assert env.comment_route.call_count == 0, "an incomplete review cannot say the code looks good"
+
+
+async def test_a_failure_to_post_the_lgtm_does_not_fail_the_review(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    import httpx
+
+    env = build_env(tmp_path, respx_mock, [reply(submit_review())])
+    env.comment_route.mock(return_value=httpx.Response(500, json={"message": "down"}))
+    await env.pipeline.run(env.trigger())
+    assert env.store.has_review_run("o/r", 1) is True
+
+
+def _reactions(env: object) -> list[str]:
+    route = env.reaction_route  # type: ignore[attr-defined]
+    return [json.loads(call.request.content)["content"] for call in route.calls]
+
+
+async def test_the_pull_request_gets_eyes_as_soon_as_the_trigger_is_accepted(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    env = build_env(tmp_path, respx_mock, [reply(submit_review([finding("b.py", 2)]))])
+    await env.pipeline.run(env.trigger())
+    assert _reactions(env) == ["eyes"]
+    assert env.reaction_delete_route.call_count == 0, "with findings the eyes stay"
+
+
+async def test_after_the_lgtm_the_eyes_become_a_rocket_and_a_thumbs_up(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    env = build_env(tmp_path, respx_mock, [reply(submit_review())])
+    await env.pipeline.run(env.trigger())
+    assert _reactions(env) == ["eyes", "rocket", "+1"]
+    assert env.reaction_delete_route.call_count == 1
+
+
+async def test_a_skipped_trigger_gets_no_reaction(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    import pytest
+
+    from farejador.review.pipeline import TriggerSkipped
+
+    env = build_env(tmp_path, respx_mock, [reply(submit_review())])
+    trigger = env.trigger()
+    await env.pipeline.run(trigger)
+    env.reaction_route.reset()
+    with pytest.raises(TriggerSkipped):
+        await env.pipeline.run(trigger)
+    assert env.reaction_route.call_count == 0
+
+
+async def test_a_reaction_failure_does_not_fail_the_review_or_stop_the_lgtm(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    import httpx
+
+    env = build_env(tmp_path, respx_mock, [reply(submit_review())])
+    env.reaction_route.mock(return_value=httpx.Response(403, json={"message": "no"}))
+    await env.pipeline.run(env.trigger())
+    assert env.review_route.call_count == 1
+    assert json.loads(env.comment_route.calls.last.request.content)["body"] == "LGTM 👍🐶"
+    assert env.store.has_review_run("o/r", 1) is True

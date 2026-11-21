@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from farejador.agent.schemas import OpenThread
 from farejador.review.labels import skip_reason_label
 
-PROMPT_VERSION = "2026-11-21.2"
+PROMPT_VERSION = "2026-11-21.3"
 
 _SECURITY = """\
 Regras de segurança:
@@ -97,17 +97,21 @@ Como revisar:
 linha no arquivo novo. As linhas marcadas com "-" foram removidas e não têm número.
 2. Quando precisar de contexto (chamadores, definições, convenções), use read_file, grep e list_dir \
 no repositório no head do pull request. Prefira poucas consultas focadas a ler tudo.
-3. Reporte apenas problemas de que você tenha confiança e que um mantenedor gostaria de corrigir. \
-Poucos achados bons valem mais; reporte no máximo 10, os mais importantes primeiro.
+3. Reporte todo problema real de que você tenha confiança e que um mantenedor gostaria de corrigir, \
+no máximo 10, os mais importantes primeiro; não pare no primeiro achado. Para cada função ou ramo \
+novo, pense nas entradas de borda (lista vazia, zero, None, tamanho par e ímpar, valores negativos) \
+e confirme com read_file ou grep quando o código ao redor importar. Não invente problemas: sem \
+confiança, não reporte.
 4. Todo achado é publicado como um comentário com três partes, e você escreve cada uma em um campo:
    - problem: UM parágrafo curto (até 500 caracteres) descrevendo o problema encontrado;
    - rationale: por que de fato é um problema, os impactos e os riscos (até 1500 caracteres);
    - suggestion: a mudança sugerida e por que ela faz sentido (até 1000 caracteres);
-   - suggestion_diff (opcional): só se a mudança for curta (até 20 linhas), o próprio código no \
-formato do git: linhas com "-" para o que apagar, com "+" para o que adicionar e, se ajudar, linhas \
+   - suggestion_diff: inclua SEMPRE que a correção couber em até 20 linhas, mostrando o próprio \
+código no formato do git: linhas com "-" para o que apagar, com "+" para o que adicionar e, se ajudar, linhas \
 de contexto começando com um espaço. O marcador vem colado ao código, sem espaço extra (o recuo do \
 código é preservado depois do marcador), e as linhas com "-" devem ser cópias exatas do código \
-atual; se não tiver certeza do código exato ou ele for longo, omita suggestion_diff.
+atual (as linhas "+" do diff mostram o código exato); omita suggestion_diff somente se não tiver \
+certeza do código exato ou se a mudança for longa.
    Ancore o achado em uma linha marcada com "+" usando o número mostrado, e use o caminho do \
 arquivo exatamente como aparece em <file path="...">.
 5. Ao terminar, você DEVE chamar submit_review com um resumo curto e seus achados. Uma lista vazia \

@@ -97,6 +97,8 @@ class Env:
     diff_route: respx.Route
     review_route: respx.Route
     comment_route: respx.Route
+    reaction_route: respx.Route
+    reaction_delete_route: respx.Route
     graphql_route: respx.Route
     runner: AgentRunner
     open_workspace: Callable[[str, str, str], AbstractAsyncContextManager[Workspace]]
@@ -147,6 +149,12 @@ def build_env(
     )
     comment_route = router.post(f"{API}/repos/{REPO}/issues/1/comments").mock(
         return_value=httpx.Response(201, json={"id": 88})
+    )
+    reaction_route = router.post(f"{API}/repos/{REPO}/issues/1/reactions").mock(
+        return_value=httpx.Response(201, json={"id": 5})
+    )
+    reaction_delete_route = router.delete(f"{API}/repos/{REPO}/issues/1/reactions/5").mock(
+        return_value=httpx.Response(204)
     )
     graphql_route = router.post(f"{API}/graphql").mock(
         return_value=httpx.Response(
@@ -201,6 +209,8 @@ def build_env(
         diff_route=diff_route,
         review_route=review_route,
         comment_route=comment_route,
+        reaction_route=reaction_route,
+        reaction_delete_route=reaction_delete_route,
         graphql_route=graphql_route,
         runner=runner,
         open_workspace=open_workspace,

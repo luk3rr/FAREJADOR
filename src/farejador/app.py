@@ -144,7 +144,10 @@ async def build_runtime(
     bot_login = await resolve_bot_login(client, settings.bot_login)
 
     if llm is None:
-        openrouter = OpenRouterClient(settings.openrouter_api_key.get_secret_value())
+        openrouter = OpenRouterClient(
+            settings.openrouter_api_key.get_secret_value(),
+            reasoning_effort=settings.reasoning_effort,
+        )
         closers.append(openrouter.aclose)
         llm = openrouter
 

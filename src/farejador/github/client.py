@@ -274,6 +274,25 @@ class GitHubClient:
         )
         return int(response.json()["id"])
 
+    async def add_reaction(self, installation_id: int, repo: str, number: int, content: str) -> int:
+        """React to the pull request itself; GitHub answers with the existing one if repeated."""
+        response = await self._call(
+            "POST",
+            f"/repos/{repo}/issues/{number}/reactions",
+            installation_id=installation_id,
+            json={"content": content},
+        )
+        return int(response.json()["id"])
+
+    async def delete_reaction(
+        self, installation_id: int, repo: str, number: int, reaction_id: int
+    ) -> None:
+        await self._call(
+            "DELETE",
+            f"/repos/{repo}/issues/{number}/reactions/{reaction_id}",
+            installation_id=installation_id,
+        )
+
     # -- graphql -----------------------------------------------------------
 
     async def _graphql(

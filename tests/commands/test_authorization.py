@@ -33,6 +33,7 @@ async def test_users_without_write_access_get_no_response_at_all(
     await cmd.handler.run(cmd.trigger())
     assert cmd.env.review_route.call_count == 0
     assert cmd.env.comment_route.call_count == 0
+    assert cmd.env.reaction_route.call_count == 0
     assert cmd.env.pr_route.call_count == 0
     assert cmd.env.llm.calls == []
 
@@ -105,3 +106,16 @@ async def test_a_finished_first_review_does_not_block_commands(
     cmd.env.store.mark(first.key, TriggerStatus.DONE)
     await cmd.handler.run(cmd.trigger())
     assert cmd.env.review_route.call_count == 1
+
+
+async def test_an_accepted_command_reacts_with_eyes_on_the_pull_request(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    import json
+
+    cmd = build_cmd_env(tmp_path, respx_mock, [reply(submit_review())])
+    await cmd.handler.run(cmd.trigger())
+    reactions = [
+        json.loads(call.request.content)["content"] for call in cmd.env.reaction_route.calls
+    ]
+    assert reactions[0] == "eyes"
