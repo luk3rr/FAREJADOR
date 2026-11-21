@@ -73,7 +73,11 @@ def pr_json(
     }
 
 
-def thread_node(thread_id: str, *, author: str = BOT, resolved: bool = False) -> dict:  # type: ignore[type-arg]
+# GraphQL writes an App as plain "farejador", while REST (and BOT) say "farejador[bot]".
+GRAPHQL_BOT = "farejador"
+
+
+def thread_node(thread_id: str, *, author: str = GRAPHQL_BOT, resolved: bool = False) -> dict:  # type: ignore[type-arg]
     return {
         "id": thread_id,
         "isResolved": resolved,

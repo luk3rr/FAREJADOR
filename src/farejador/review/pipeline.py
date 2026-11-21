@@ -19,7 +19,7 @@ from farejador.agent.runner import AgentRunner, InvalidModelOutput, ReviewRun
 from farejador.dispatcher import TriggerSkipped
 from farejador.github.client import GitHubClient
 from farejador.github.errors import AuthError, GitHubApiError
-from farejador.github.models import PullRequest
+from farejador.github.models import PullRequest, same_login
 from farejador.log import log_run
 from farejador.models import Trigger
 from farejador.review.diff import DiffFile, parse_diff, render_numbered
@@ -308,7 +308,7 @@ class FirstReview:
         for thread in threads:
             if thread.is_resolved or thread.id in known:
                 continue
-            if thread.author_login.lower() != bot.lower():
+            if not same_login(thread.author_login, bot):
                 continue
             await asyncio.to_thread(
                 partial(

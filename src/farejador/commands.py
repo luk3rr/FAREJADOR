@@ -17,7 +17,7 @@ from farejador.agent.schemas import OpenThread
 from farejador.dispatcher import TriggerSkipped
 from farejador.github.client import GitHubClient
 from farejador.github.errors import AuthError, GitHubApiError
-from farejador.github.models import ReviewThread
+from farejador.github.models import ReviewThread, same_login
 from farejador.models import Trigger
 from farejador.review.pipeline import (
     FirstReview,
@@ -139,11 +139,11 @@ class CommandHandler:
             thread.thread_id: thread
             for thread in await asyncio.to_thread(self._store.list_threads, repo, number)
         }
-        bot = (self._config.bot_login or "").lower()
+        bot = self._config.bot_login or ""
 
         open_threads: list[ReviewThread] = []
         for thread in threads:
-            is_bot = thread.author_login.lower() == bot if bot else thread.id in stored
+            is_bot = same_login(thread.author_login, bot) if bot else thread.id in stored
             if not is_bot:
                 continue
             if thread.is_resolved:

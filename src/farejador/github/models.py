@@ -11,6 +11,20 @@ from typing import Any, Self
 from pydantic import BaseModel, ConfigDict
 
 
+def same_login(first: str, second: str) -> bool:
+    """Whether two logins name the same account.
+
+    GitHub writes an App's login as ``slug[bot]`` in the REST API but as plain ``slug`` in GraphQL,
+    so the ``[bot]`` suffix is ignored; the comparison is also case-insensitive.
+    """
+
+    def plain(login: str) -> str:
+        lowered = login.strip().lower()
+        return lowered.removesuffix("[bot]")
+
+    return plain(first) != "" and plain(first) == plain(second)
+
+
 class _Model(BaseModel):
     model_config = ConfigDict(frozen=True)
 
