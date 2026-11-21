@@ -270,9 +270,12 @@ async def test_the_published_review_is_identical_with_and_without_the_trace(
     )
     await with_trace.pipeline.run(with_trace.trigger())
     traced.recorder.stop()
-    assert with_trace.review_route.calls.last.request.content == expected.replace(
-        plain.sha.encode(), with_trace.sha.encode()
+    # The two repositories are built apart, so their commits differ (the hash depends on the
+    # time): the body carries the full sha in ``commit_id`` and the short one in its heading.
+    normalized = expected.replace(plain.sha.encode(), with_trace.sha.encode()).replace(
+        plain.sha[:7].encode(), with_trace.sha[:7].encode()
     )
+    assert with_trace.review_route.calls.last.request.content == normalized
 
 
 async def test_a_broken_trace_never_changes_the_review(
