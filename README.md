@@ -75,7 +75,7 @@ Copie `.env.example` para `.env` e preencha. Nunca versione o `.env` nem o arqui
 | `FAREJADOR_WEBHOOK_SECRET` | modos webhook | | O segredo do webhook configurado no App |
 | `FAREJADOR_OPENROUTER_API_KEY` | sim | | Sua chave da OpenRouter |
 | `FAREJADOR_MODEL` | sim | | Id do modelo na OpenRouter (precisa suportar tool calling) |
-| `FAREJADOR_TRIGGER_TEXT` | não | `@farejador` | Texto que aciona um comando em um comentário |
+| `FAREJADOR_TRIGGER_TEXT` | não | `@` + o nome do seu App | Texto que aciona um comando em um comentário. Sem valor, o Farejador usa a menção do próprio App (por exemplo `@farejadorr`) |
 | `FAREJADOR_BOT_LOGIN` | não | derivado | Login do bot, normalmente `<slug-do-app>[bot]` |
 | `FAREJADOR_POLL_INTERVAL_S` | não | `60` | Segundos entre as consultas |
 | `FAREJADOR_WORKERS` | não | `2` | Revisões em paralelo |

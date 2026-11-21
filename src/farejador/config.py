@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     webhook_secret: SecretStr | None = None
     openrouter_api_key: SecretStr
     model: str = Field(min_length=1)
-    trigger_text: str = Field(default="@farejador", min_length=1)
+    trigger_text: str | None = Field(default=None, min_length=1)
     bot_login: str | None = None
     poll_interval_s: int = Field(default=60, ge=5)
     workers: int = Field(default=2, ge=1, le=16)
@@ -119,3 +119,18 @@ def _describe(exc: ValidationError) -> str:
         else:
             lines.append(message)
     return "Invalid configuration: " + "; ".join(lines)
+
+
+DEFAULT_TRIGGER_TEXT = "@farejador"
+
+
+def effective_trigger_text(configured: str | None, bot_login: str | None) -> str:
+    """What a comment must contain to trigger the bot.
+
+    The configured text wins. Otherwise it is the App's own mention (``@slug``), so the bot always
+    asks to be called by its real name; ``@farejador`` is only the last resort.
+    """
+    if configured:
+        return configured
+    slug = (bot_login or "").strip().removesuffix("[bot]")
+    return f"@{slug}" if slug else DEFAULT_TRIGGER_TEXT

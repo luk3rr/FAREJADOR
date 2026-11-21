@@ -29,7 +29,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
 def test_defaults_match_contract(env: pytest.MonkeyPatch) -> None:
     settings = Settings.load()
     assert settings.mode is Mode.POLLING
-    assert settings.trigger_text == "@farejador"
+    assert settings.trigger_text is None  # derived from the App's name at startup
     assert settings.poll_interval_s == 60
     assert settings.workers == 2
     assert (settings.max_steps, settings.max_tokens) == (15, 200_000)
@@ -149,3 +149,23 @@ def test_reasoning_effort_accepts_the_known_levels_only(env: pytest.MonkeyPatch)
     env.setenv("FAREJADOR_REASONING_EFFORT", "max")
     with pytest.raises(Exception):  # noqa: B017  (the loader wraps validation errors)
         Settings.load()
+
+
+@pytest.mark.parametrize(
+    ("configured", "bot_login", "expected"),
+    [
+        (None, "farejadorr[bot]", "@farejadorr"),
+        (None, "farejadorr", "@farejadorr"),
+        (None, "  Meu-App[bot] ", "@Meu-App"),
+        ("@ajuda", "farejadorr[bot]", "@ajuda"),
+        (None, None, "@farejador"),
+        (None, "", "@farejador"),
+        (None, "[bot]", "@farejador"),
+    ],
+)
+def test_the_trigger_is_the_apps_own_mention_unless_configured(
+    configured: str | None, bot_login: str | None, expected: str
+) -> None:
+    from farejador.config import effective_trigger_text
+
+    assert effective_trigger_text(configured, bot_login) == expected

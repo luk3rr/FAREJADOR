@@ -26,7 +26,7 @@ from farejador.agent.prompts import PROMPT_VERSION
 from farejador.agent.runner import AgentRunner, Budget
 from farejador.api.routes import create_api
 from farejador.commands import CommandHandler
-from farejador.config import ConfigError, Mode, Settings
+from farejador.config import ConfigError, Mode, Settings, effective_trigger_text
 from farejador.dispatcher import Dispatcher
 from farejador.github.auth import CLONE_PERMISSIONS, AppAuth
 from farejador.github.client import GitHubClient, resolve_bot_login
@@ -142,6 +142,7 @@ async def build_runtime(
     auth = AppAuth(settings.github_app_id, private_key, http=http)
     client = GitHubClient(auth, http=http)
     bot_login = await resolve_bot_login(client, settings.bot_login)
+    trigger_text = effective_trigger_text(settings.trigger_text, bot_login)
 
     if llm is None:
         openrouter = OpenRouterClient(
@@ -163,7 +164,7 @@ async def build_runtime(
         mode=settings.mode.value,
         max_files=settings.max_files,
         ignore_globs=tuple(settings.ignore_globs),
-        trigger_text=settings.trigger_text,
+        trigger_text=trigger_text,
         bot_login=bot_login,
     )
 
@@ -205,7 +206,7 @@ async def build_runtime(
             client=client,
             store=store,
             submit=dispatcher.submit,
-            trigger_text=settings.trigger_text,
+            trigger_text=trigger_text,
             bot_login=bot_login,
             interval_s=float(settings.poll_interval_s),
         )
@@ -217,7 +218,7 @@ async def build_runtime(
         webhook_app = create_app(
             secret=secret.get_secret_value(),
             submit=dispatcher.submit,
-            trigger_text=settings.trigger_text,
+            trigger_text=trigger_text,
             bot_login=bot_login,
             mode=settings.mode.value,
         )
