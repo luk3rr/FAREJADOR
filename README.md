@@ -32,9 +32,11 @@ flowchart LR
   rascunho é marcado como pronto para revisão, o Farejador publica uma revisão: comentários
   inline nas linhas adicionadas mais um resumo.
 - **Interações seguintes (sob demanda).** Novos pushes **não** disparam nada. Quem tem permissão de
-  escrita menciona `@farejador` em um comentário do pull request. O Farejador então reavalia os
-  próprios threads abertos contra o código atual e resolve os que foram corrigidos. Se não sobrar
-  nenhuma aberta, publica uma nova revisão; se sobrarem, responde apenas com um status curto.
+  escrita menciona `@farejador` em um comentário do pull request. Com threads abertos, o Farejador
+  só confere se cada um foi corrigido no código atual e resolve os que foram, **sem procurar
+  problemas novos**. Se todos forem resolvidos, comenta `LGTM 👍🐶`; se sobrarem, responde com um status
+  curto. Sem threads abertos (por exemplo, para pedir mais depois do LGTM), uma menção faz uma nova
+  revisão completa do código atual.
 - **Seguro por construção.** O agente tem três ferramentas somente leitura, todo achado é conferido
   contra o diff real antes de virar comentário inline, o texto do modelo é sanitizado e os segredos
   são mascarados antes de qualquer envio ao modelo.
@@ -141,9 +143,10 @@ No modo `webhook` o serviço também serve um painel público e somente leitura 
    aparece em até um intervalo de polling, ou na hora no modo webhook.
 2. Corrija o que concordar e faça push. Nada acontece sozinho.
 3. Comente `@farejador` no pull request (é preciso ter permissão de escrita). Os threads corrigidos
-   são resolvidos; se nenhum sobrar aberto, você recebe uma nova revisão do head atual; caso contrário,
-   um comentário de status lista o que ainda está pendente. Resolva você mesmo os threads de que
-   discordar e mencione de novo.
+   são resolvidos e, se todos forem, você recebe `LGTM 👍🐶` (sem nova revisão do código); caso
+   contrário, um comentário de status lista o que ainda está pendente. Resolva você mesmo os threads
+   de que discordar e mencione de novo. Para uma nova revisão completa depois do LGTM, mencione de
+   novo: sem threads abertos, o Farejador revisa o head atual.
 4. Se uma revisão falhar (por exemplo, erro do modelo), você recebe um único aviso curto. Mencione
    `@farejador` para tentar outra vez.
 

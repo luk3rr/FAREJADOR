@@ -90,7 +90,7 @@ class CommandHandler:
             )
             return
 
-        await self._publisher.acknowledge(installation, repo, pr.number)
+        eyes = await self._publisher.acknowledge(installation, repo, pr.number)
         trace: RunTrace = NULL_RUN
         try:
             open_threads = await self._open_bot_threads(trigger)
@@ -120,6 +120,12 @@ class CommandHandler:
                 trigger_text=self._config.trigger_text,
             )
             await self._publisher.post_comment(installation, repo, trigger.pr_number, body)
+            return
+        if open_threads:
+            # Every thread the bot opened is resolved. The command only checked those threads: it
+            # does not look for new problems. Another review is a new mention after this LGTM.
+            if await self._publisher.post_lgtm(installation, repo, trigger.pr_number):
+                await self._publisher.celebrate(installation, repo, trigger.pr_number, eyes)
             return
         await self._review.review_now(trigger)
 

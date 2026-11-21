@@ -206,7 +206,7 @@ class Publisher:
         lines += [
             "",
             "Corrija estes pontos (ou resolva você mesmo os threads de que discordar) e mencione "
-            f"`{_code(trigger_text)}` de novo para uma nova revisão.",
+            f"`{_code(trigger_text)}` de novo para eu conferir se foram resolvidos.",
         ]
         return "\n".join(lines)
 

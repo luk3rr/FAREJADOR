@@ -311,7 +311,7 @@ async def test_a_command_that_reevaluates_threads_leaves_a_command_trace(
     cmd = build_cmd_env(
         tmp_path,
         respx_mock,
-        [reply(verdicts), reply(submit_review())],  # all fixed, so a new review follows
+        [reply(verdicts)],  # all fixed: the command only checks the open threads
         threads=[thread_node("T1")],
         recorder=traced.recorder,
         repo_private=False,
@@ -320,7 +320,7 @@ async def test_a_command_that_reevaluates_threads_leaves_a_command_trace(
     await cmd.handler.run(cmd.trigger())
     conn = traced.read()
     kinds = [r[0] for r in conn.execute("SELECT kind FROM trace_run ORDER BY id")]
-    assert kinds == ["command", "review"]  # the reevaluation, then the review it triggered
+    assert kinds == ["command"]  # the reevaluation only; no new review of the code
     run = conn.execute("SELECT * FROM trace_run WHERE kind = 'command'").fetchone()
     assert (run["outcome"], run["repo_public"], run["steps"]) == ("complete", 1, 0)
     command_steps = conn.execute(

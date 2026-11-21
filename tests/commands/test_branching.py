@@ -39,7 +39,7 @@ async def test_without_any_open_thread_a_new_review_is_posted_at_the_current_hea
     assert cmd.env.llm.calls[0].tool_names[-1] == "submit_review"
 
 
-async def test_when_every_thread_was_fixed_a_new_review_follows(
+async def test_when_every_thread_was_fixed_only_an_lgtm_follows_and_no_new_review(
     tmp_path: Path, respx_mock: respx.MockRouter
 ) -> None:
     cmd = build_cmd_env(
@@ -50,9 +50,14 @@ async def test_when_every_thread_was_fixed_a_new_review_follows(
     )
     await cmd.handler.run(cmd.trigger())
     assert cmd.resolved_ids == ["T1", "T2"]
-    assert cmd.env.review_route.call_count == 1
-    assert cmd.env.comment_route.call_count == 0
-    assert [c.tool_names[-1] for c in cmd.env.llm.calls] == ["submit_verdicts", "submit_review"]
+    # the command only checked the open threads: no new look at the code, so no new findings
+    assert cmd.env.review_route.call_count == 0
+    assert [c.tool_names[-1] for c in cmd.env.llm.calls] == ["submit_verdicts"]
+    assert cmd.env.comment_route.call_count == 1
+    assert json.loads(cmd.env.comment_route.calls.last.request.content)["body"] == "LGTM 👍🐶"
+    reactions = [json.loads(c.request.content)["content"] for c in cmd.env.reaction_route.calls]
+    assert reactions == ["eyes", "rocket", "+1"]
+    assert cmd.env.reaction_delete_route.call_count == 1  # the eyes are taken off
 
 
 async def test_with_pending_threads_only_a_status_comment_is_posted(
@@ -75,7 +80,7 @@ async def test_with_pending_threads_only_a_status_comment_is_posted(
     assert body.startswith("## Status do Farejador")
     assert "Resolvidos: 1 · Ainda pendentes: 2" in body
     assert "- `src/a.py:12` — Extract this branch." in body
-    assert "mencione `@farejador` de novo para uma nova revisão" in body
+    assert "mencione `@farejador` de novo para eu conferir se foram resolvidos" in body
     assert len(cmd.env.llm.calls) == 1  # no review conversation was started
 
 
@@ -152,3 +157,20 @@ async def test_two_commands_on_the_same_pull_request_run_one_after_the_other(
     assert cmd.env.review_route.call_count == 1
     assert cmd.env.comment_route.call_count == 1
     assert [c.tool_names[-1] for c in cmd.env.llm.calls] == ["submit_review", "submit_verdicts"]
+
+
+async def test_a_failed_lgtm_comment_does_not_fail_the_command_or_swap_the_reactions(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    import httpx
+
+    cmd = build_cmd_env(
+        tmp_path,
+        respx_mock,
+        [reply(_verdicts(("T1", True)))],
+        threads=[thread_node("T1")],
+    )
+    cmd.env.comment_route.mock(return_value=httpx.Response(500, json={"message": "down"}))
+    await cmd.handler.run(cmd.trigger())
+    assert cmd.resolved_ids == ["T1"]
+    assert cmd.env.reaction_delete_route.call_count == 0, "no LGTM was posted, so the eyes stay"
