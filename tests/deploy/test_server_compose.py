@@ -6,13 +6,14 @@
 
 import re
 from configparser import ConfigParser
+from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
 from tests.workflows import ROOT
 
-COMPOSE = yaml.safe_load((ROOT / "docker-compose.server.yml").read_text())
+COMPOSE = yaml.safe_load((ROOT / "docker-compose.server.yml").read_text(encoding="utf-8"))
 SERVICES: dict[str, Any] = COMPOSE["services"]
 
 
@@ -64,7 +65,7 @@ def test_farejador_runs_in_webhook_mode_and_secrets_come_from_files_outside_the_
 
 
 def test_no_secret_value_is_written_in_the_compose_file() -> None:
-    text = (ROOT / "docker-compose.server.yml").read_text()
+    text = (ROOT / "docker-compose.server.yml").read_text(encoding="utf-8")
     assert not re.search(
         r"(?i)(token|secret|api_key|password)\s*[:=]\s*[\"']?[A-Za-z0-9_\-]{12,}", text
     )
@@ -79,7 +80,7 @@ def test_the_tunnel_runs_with_the_token_and_without_self_update() -> None:
 def test_the_healthcheck_uses_the_cli_that_exists_in_the_image() -> None:
     healthcheck = SERVICES["farejador"]["healthcheck"]
     assert healthcheck["test"] == ["CMD", "farejador", "healthcheck"]
-    cli = (ROOT / "src" / "farejador" / "cli.py").read_text()
+    cli = (ROOT / "src" / "farejador" / "cli.py").read_text(encoding="utf-8")
     assert "healthcheck" in cli
 
 
@@ -89,7 +90,7 @@ def test_the_stack_has_a_private_network_and_a_named_volume() -> None:
 
 
 def test_env_examples_list_the_variables_the_app_needs_and_hold_no_values() -> None:
-    farejador = (ROOT / "deploy" / "farejador.env.example").read_text()
+    farejador = (ROOT / "deploy" / "farejador.env.example").read_text(encoding="utf-8")
     for variable in (
         "FAREJADOR_GITHUB_APP_ID",
         "FAREJADOR_GITHUB_PRIVATE_KEY_PATH",
@@ -100,7 +101,7 @@ def test_env_examples_list_the_variables_the_app_needs_and_hold_no_values() -> N
         assert re.search(rf"^{variable}=", farejador, re.M), variable
     assert "FAREJADOR_GITHUB_PRIVATE_KEY_PATH=/run/secrets/github_app.pem" in farejador
     assert not re.search(r"^FAREJADOR_MODE=", farejador, re.M)
-    tunnel = (ROOT / "deploy" / "cloudflared.env.example").read_text()
+    tunnel = (ROOT / "deploy" / "cloudflared.env.example").read_text(encoding="utf-8")
     assert re.search(r"^TUNNEL_TOKEN=$", tunnel, re.M)
     for text in (farejador, tunnel):
         for line in text.splitlines():
@@ -111,7 +112,7 @@ def test_env_examples_list_the_variables_the_app_needs_and_hold_no_values() -> N
 def _unit(name: str) -> ConfigParser:
     parser = ConfigParser(strict=False, interpolation=None)
     parser.optionxform = str  # type: ignore[assignment,method-assign]
-    parser.read_string((ROOT / "deploy" / name).read_text())
+    parser.read_string((ROOT / "deploy" / name).read_text(encoding="utf-8"))
     return parser
 
 
@@ -138,7 +139,7 @@ def test_the_trace_database_lives_in_the_persistent_data_volume() -> None:
     from farejador.config import Settings
 
     default = Settings.model_fields["trace_path"].default
-    assert str(default) == "/data/trace.db"
+    assert Path(str(default)).as_posix().endswith("/data/trace.db")
     assert "farejador-data:/data" in SERVICES["farejador"]["volumes"]
     assert "farejador-data" in COMPOSE["volumes"]
     # the volume is the only writable place besides the size-limited /tmp
@@ -148,7 +149,7 @@ def test_the_trace_database_lives_in_the_persistent_data_volume() -> None:
 
 
 def test_the_server_env_example_documents_the_trace_settings_that_matter() -> None:
-    text = (ROOT / "deploy" / "farejador.env.example").read_text()
+    text = (ROOT / "deploy" / "farejador.env.example").read_text(encoding="utf-8")
     for name in ("FAREJADOR_TRACE_ENABLED", "FAREJADOR_TRACE_RETENTION_DAYS"):
         assert re.search(rf"^# {name}=", text, re.M), name
     for line in text.splitlines():

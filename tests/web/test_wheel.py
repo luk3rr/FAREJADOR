@@ -14,7 +14,7 @@ STATIC = ROOT / "src" / "farejador" / "web" / "static"
 
 
 def test_the_build_output_is_declared_as_a_wheel_artifact() -> None:
-    text = (ROOT / "pyproject.toml").read_text()
+    text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert 'artifacts = ["src/farejador/web/static/**"]' in text
 
 

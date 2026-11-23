@@ -83,7 +83,7 @@ def test_the_scanner_ignores_comments_and_harmless_code() -> None:
 
 @pytest.mark.parametrize("path", sources(), ids=lambda p: str(p.relative_to(SRC)))
 def test_no_source_file_uses_a_forbidden_api(path: Path) -> None:
-    assert violations(path.read_text()) == []
+    assert violations(path.read_text(encoding="utf-8")) == []
 
 
 def test_there_are_sources_to_scan() -> None:
@@ -95,7 +95,7 @@ def test_only_the_entry_point_touches_the_page() -> None:
     for path in sources():
         if path.name == "main.ts":
             continue
-        code = strip_comments(path.read_text())
+        code = strip_comments(path.read_text(encoding="utf-8"))
         assert not re.search(r"\b(document|window|localStorage|location)\b", code), path.name
 
 
@@ -103,7 +103,7 @@ def test_every_source_file_starts_with_the_standard_header() -> None:
     for path in sources():
         if path.name == "types.ts":  # generated
             continue
-        lines = path.read_text().splitlines()
+        lines = path.read_text(encoding="utf-8").splitlines()
         assert lines[0] == f"// Filename: {path.name}", path.name
         assert re.fullmatch(r"// Created on: [A-Z][a-z]+ \d{1,2}, \d{4}", lines[1]), path.name
         assert lines[2] == "// Author: Lucas Araújo <araujolucas@dcc.ufmg.br>", path.name

@@ -10,7 +10,7 @@ import subprocess
 from tests.workflows import ROOT
 
 SCRIPT = ROOT / "deploy" / "bootstrap.sh"
-TEXT = SCRIPT.read_text()
+TEXT = SCRIPT.read_text(encoding="utf-8")
 
 
 def test_the_script_is_valid_bash_and_starts_with_the_file_header() -> None:
@@ -35,7 +35,7 @@ def test_the_cosign_version_and_checksums_are_pinned_and_verified_before_install
 
 def test_the_cosign_version_matches_the_release_workflow() -> None:
     version = re.search(r'^COSIGN_VERSION="(v[\d.]+)"$', TEXT, re.M)
-    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text()
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
     assert version is not None
     assert workflow.count(f"cosign-release: {version.group(1)}") == 2
 
@@ -93,7 +93,7 @@ def test_flock_comes_from_util_linux_because_it_is_not_an_apt_package() -> None:
 
 def test_the_updater_unit_can_run_a_script_reached_through_a_symlink_into_home() -> None:
     """ProtectHome=true hid the linked repo and made systemd fail with 203/EXEC."""
-    unit = (ROOT / "deploy" / "farejador-update.service").read_text()
+    unit = (ROOT / "deploy" / "farejador-update.service").read_text(encoding="utf-8")
     assert "ProtectHome=read-only" in unit
     assert "ProtectHome=true" not in unit
     assert "ExecStart=/opt/farejador/repo/deploy/update.sh" in unit

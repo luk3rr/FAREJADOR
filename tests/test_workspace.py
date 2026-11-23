@@ -2,12 +2,17 @@
 # Created on: November 20, 2026
 # Author: Lucas Araújo <araujolucas@dcc.ufmg.br>
 
+import sys
 from pathlib import Path
 
 import pytest
 from tests.gitrepo import git, make_repo
 
 from farejador.workspace import Workspace, WorkspaceError
+
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32", reason="the workspace uses POSIX process groups"
+)
 
 TOKEN = "ghs_supersecrettokenvalue1234567890"
 
@@ -22,7 +27,7 @@ def remote(tmp_path: Path) -> tuple[Path, str]:
 async def test_opens_the_requested_commit_and_exposes_tools(remote: tuple[Path, str]) -> None:
     root, sha = remote
     async with Workspace.open("o/r", sha, TOKEN, remote_url=str(root)) as workspace:
-        assert (workspace.path / "src" / "app.py").read_text() == "print('hello')\n"
+        assert (workspace.path / "src" / "app.py").read_text(encoding="utf-8") == "print('hello')\n"
         assert workspace.sha == sha
         assert "1: print('hello')" in workspace.tools.read_file("src/app.py")
         assert "src/app.py:1:print" in workspace.tools.grep("hello")
@@ -34,13 +39,13 @@ async def test_checks_out_an_older_commit_not_the_tip(remote: tuple[Path, str]) 
     (root / "src" / "app.py").write_text("print('changed')\n")
     git(root, "commit", "-aqm", "second")
     async with Workspace.open("o/r", first, TOKEN, remote_url=str(root)) as workspace:
-        assert (workspace.path / "src" / "app.py").read_text() == "print('hello')\n"
+        assert (workspace.path / "src" / "app.py").read_text(encoding="utf-8") == "print('hello')\n"
 
 
 async def test_the_token_is_never_written_to_the_checkout(remote: tuple[Path, str]) -> None:
     root, sha = remote
     async with Workspace.open("o/r", sha, TOKEN, remote_url=str(root)) as workspace:
-        config = (workspace.path / ".git" / "config").read_text()
+        config = (workspace.path / ".git" / "config").read_text(encoding="utf-8")
         assert TOKEN not in config
         assert "extraheader" not in config.lower()
         assert "x-access-token" not in config

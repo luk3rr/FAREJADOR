@@ -73,7 +73,7 @@ class Sandbox:
     @property
     def calls(self) -> list[str]:
         log = self.stub_dir / "calls.log"
-        return log.read_text().splitlines() if log.exists() else []
+        return log.read_text(encoding="utf-8").splitlines() if log.exists() else []
 
     @property
     def image_env(self) -> Path:

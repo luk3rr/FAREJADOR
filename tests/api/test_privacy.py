@@ -97,7 +97,7 @@ async def test_a_run_whose_visibility_was_never_recorded_is_private(tmp_path: Pa
 
 def test_every_statement_that_reads_runs_carries_the_privacy_condition() -> None:
     """If someone adds a query on trace_run without the condition, this test fails (FN-10)."""
-    source = Path(queries.__file__).read_text()
+    source = Path(queries.__file__).read_text(encoding="utf-8")
     statements = [m.start() for m in re.finditer(r"FROM trace_run", source)]
     assert len(statements) >= 3
     for start in statements:
@@ -112,7 +112,8 @@ def test_the_privacy_condition_is_not_defined_anywhere_else() -> None:
         str(path.relative_to(root))
         for path in root.rglob("*.py")
         # store.py has it in the write-side downgrade rule (FN-11), which is not a read
-        if "repo_public = 1" in path.read_text() and path.name not in ("queries.py", "store.py")
+        if "repo_public = 1" in path.read_text(encoding="utf-8")
+        and path.name not in ("queries.py", "store.py")
     ]
     assert offenders == []
 

@@ -27,9 +27,9 @@ def test_everything_the_page_loads_fits_in_150_kb() -> None:
 
 
 def test_the_page_loads_no_file_from_outside_assets() -> None:
-    index = (WEB / "static" / "index.html").read_text()
+    index = (WEB / "static" / "index.html").read_text(encoding="utf-8")
     for token in ("http://", "https://", "//cdn", "<style", "<script>", " onclick", " style="):
         assert token not in index, token
     assert index.count("<script") == 1 and 'type="module"' in index
-    css = (WEB / "static" / "styles.css").read_text()
+    css = (WEB / "static" / "styles.css").read_text(encoding="utf-8")
     assert "@import" not in css and "url(" not in css

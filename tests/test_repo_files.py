@@ -12,7 +12,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def _ci() -> dict[str, Any]:
-    loaded: dict[str, Any] = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+    loaded: dict[str, Any] = yaml.safe_load(
+        (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    )
     return loaded
 
 
@@ -55,7 +57,7 @@ def test_ci_builds_and_checks_the_image_after_the_quality_gates() -> None:
 def test_sonar_properties_have_required_keys() -> None:
     props = dict(
         line.split("=", 1)
-        for line in (ROOT / "sonar-project.properties").read_text().splitlines()
+        for line in (ROOT / "sonar-project.properties").read_text(encoding="utf-8").splitlines()
         if "=" in line
     )
     for key in ("sonar.projectKey", "sonar.organization", "sonar.sources", "sonar.tests"):
@@ -64,13 +66,13 @@ def test_sonar_properties_have_required_keys() -> None:
 
 
 def test_pyproject_pins_python_and_tooling() -> None:
-    data = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert data["project"]["requires-python"] == ">=3.12"
     assert data["tool"]["mypy"]["strict"] is True
     assert (ROOT / "uv.lock").is_file()
 
 
 def test_precommit_runs_ruff_and_mypy() -> None:
-    config = yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text())
+    config = yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
     ids = {hook["id"] for repo in config["repos"] for hook in repo["hooks"]}
     assert {"ruff-check", "ruff-format", "mypy"} <= ids

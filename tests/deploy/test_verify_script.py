@@ -201,7 +201,7 @@ def test_no_secret_is_ever_printed(tmp_path: Path) -> None:
 
 
 def test_every_request_has_a_timeout_and_the_script_needs_no_secret() -> None:
-    text = SCRIPT.read_text()
+    text = SCRIPT.read_text(encoding="utf-8")
     assert "--max-time" in text
     assert "CURL_TIMEOUT=10" in text
     assert "SECRET" not in text and "TOKEN" not in text
@@ -215,7 +215,7 @@ def test_usage_error_exits_with_code_2(tmp_path: Path) -> None:
 
 def test_the_script_is_valid_bash_with_the_file_header() -> None:
     subprocess.run(["bash", "-n", str(SCRIPT)], check=True)
-    lines = SCRIPT.read_text().splitlines()
+    lines = SCRIPT.read_text(encoding="utf-8").splitlines()
     assert lines[:2] == ["#!/usr/bin/env bash", "# Filename: verify_deploy.sh"]
     assert os.access(SCRIPT, os.X_OK)
 
@@ -288,6 +288,6 @@ def test_the_api_address_can_be_changed(tmp_path: Path) -> None:
 
 
 def test_the_server_mode_also_checks_the_trace_file() -> None:
-    text = SCRIPT.read_text()
+    text = SCRIPT.read_text(encoding="utf-8")
     assert "exec farejador test -s /data/trace.db" in text
     assert "the trace database exists in the data volume" in text

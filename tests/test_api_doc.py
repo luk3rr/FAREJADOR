@@ -25,7 +25,7 @@ from farejador.api.routes import (
     ToolResultOut,
 )
 
-DOC = (Path(__file__).resolve().parent.parent / "docs" / "api.md").read_text()
+DOC = (Path(__file__).resolve().parent.parent / "docs" / "api.md").read_text(encoding="utf-8")
 
 
 def test_the_documented_routes_are_the_real_ones() -> None:

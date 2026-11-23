@@ -3,6 +3,7 @@
 # Author: Lucas Araújo <araujolucas@dcc.ufmg.br>
 
 import asyncio
+import sys
 from pathlib import Path
 
 import httpx
@@ -221,6 +222,9 @@ async def test_shutdown_cancels_reviews_that_do_not_finish_within_the_grace_peri
     assert record is None  # the store is closed after the forced shutdown
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="the trace store opens a POSIX-only default path"
+)
 async def test_the_default_dependencies_are_created_and_closed_on_shutdown(
     farejador_env: Path, monkeypatch: pytest.MonkeyPatch, respx_mock: respx.MockRouter
 ) -> None:

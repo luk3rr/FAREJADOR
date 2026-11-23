@@ -140,7 +140,7 @@ def test_the_identity_regex_matches_the_certificate_of_a_real_release() -> None:
 
 
 def test_the_only_secret_used_is_the_automatic_github_token() -> None:
-    text = (WORKFLOWS / "release.yml").read_text()
+    text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
     assert set(re.findall(r"secrets\.([A-Za-z0-9_]+)", text)) == {"GITHUB_TOKEN"}
 
 
