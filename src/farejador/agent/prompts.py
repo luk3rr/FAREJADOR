@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from farejador.agent.schemas import OpenThread
 from farejador.review.labels import skip_reason_label
 
-PROMPT_VERSION = "2026-11-23.1"
+PROMPT_VERSION = "2026-11-23.2"
 
 _SECURITY = """\
 Regras de segurança:
@@ -44,7 +44,12 @@ regras/decisões não óbvias e contratos públicos.
 - Flexibilidade a mudanças: acoplamento forte a detalhes internos, rigidez a extensões (ex.: \
 cadeias de condicionais por tipo onde abstração/injeção caberia) e vazamento de estado.
 - Prevenção de bugs e dívida técnica: exceções engolidas ou genéricas demais, casos de borda \
-não tratados, gambiarras/TODOs sem contexto e lógica nova relevante sem testes correspondentes."""
+não tratados, gambiarras/TODOs sem contexto e lógica nova relevante sem testes correspondentes.
+
+Estes itens são problemas reais por si só: são visíveis no próprio diff e dispensam a confiança \
+exigida para bugs de comportamento. Categorias: números/strings mágicos e nomes ambíguos em \
+readability ou naming; cadeias de condicionais por tipo e acoplamento em design; documentação \
+ausente em maintainability; lógica nova sem testes em testing."""
 
 _FEW_SHOT = """\
 Exemplos do que sinalizar e do que NÃO sinalizar:
@@ -73,6 +78,29 @@ suggestion_diff (exemplo, as linhas com "-" copiam exatamente o código atual):
 -    total_a = soma(itens, "a")
 -    total_b = soma(itens, "b")
 +    totais = {campo: soma(itens, campo) for campo in ("a", "b")}
+</example>
+
+<example kind="SINALIZAR">
+Código adicionado: `if total > 500: rate += 0.02` e taxas como 0.05 e 0.15 espalhadas pela função.
+Achado: severity low, category readability, ancorado na primeira ocorrência.
+problem: "Os números 500, 0.02 e as taxas aparecem soltos, sem nome nem explicação."
+rationale: "Quem lê não sabe o que cada valor representa e, para mudar uma regra, precisa achar \
+todas as ocorrências."
+suggestion: "Dê nomes às constantes no topo do módulo."
+suggestion_diff:
+-    if total > 500:
+-        rate = rate + 0.02
++    if total > LIMITE_BONUS:
++        rate = rate + BONUS_VOLUME
+</example>
+
+<example kind="SINALIZAR">
+Código adicionado: `if kind == "a": ... elif kind == "b": ... elif kind == "c": ...` escolhendo uma \
+taxa por tipo.
+Achado: severity medium, category design, ancorado no primeiro `if`.
+problem: "A taxa por tipo é escolhida por uma cadeia de condicionais."
+rationale: "Cada novo tipo exige editar a função, e a regra fica misturada com o resto do cálculo."
+suggestion: "Use uma tabela (dicionário) de taxas por tipo, com valor padrão."
 </example>
 
 <example kind="NÃO SINALIZAR">
@@ -110,7 +138,8 @@ Como revisar:
 linha no arquivo novo. As linhas marcadas com "-" foram removidas e não têm número.
 2. Quando precisar de contexto (chamadores, definições, convenções), use read_file, grep e list_dir \
 no repositório no head do pull request. Prefira poucas consultas focadas a ler tudo.
-3. Reporte todo problema real de que você tenha confiança e que um mantenedor gostaria de corrigir, \
+3. Antes de entregar, percorra um a um os eixos do foco da disciplina para o código ADICIONADO e \
+reporte cada violação que encontrar. Depois reporte todo problema real de que você tenha confiança e que um mantenedor gostaria de corrigir, \
 no máximo 10, os mais importantes primeiro; não pare no primeiro achado. Para cada função ou ramo \
 novo, pense nas entradas de borda (lista vazia, zero, None, tamanho par e ímpar, valores negativos) \
 e confirme com read_file ou grep quando o código ao redor importar. Não invente problemas: sem \

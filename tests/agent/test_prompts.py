@@ -34,7 +34,8 @@ def test_the_prompt_describes_the_three_part_finding_and_the_diff_rules() -> Non
 
 def test_few_shot_examples_teach_both_what_to_flag_and_what_not_to() -> None:
     system = prompts.review_system_prompt()
-    assert system.count('<example kind="SINALIZAR">') == 2
+    assert system.count('<example kind="SINALIZAR">') == 4
+    assert "readability" in system and "cadeia de condicionais" in system
     assert system.count('<example kind="NÃO SINALIZAR">') == 3
     assert "formatador ou linter" in system
     assert "read_file ou grep" in system
