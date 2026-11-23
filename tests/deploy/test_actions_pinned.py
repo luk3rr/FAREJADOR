@@ -9,7 +9,7 @@ import re
 import pytest
 from tests.workflows import ROOT, all_workflow_files
 
-ALLOWED_OWNERS = {"actions", "astral-sh", "docker", "sigstore", "SonarSource"}
+ALLOWED_OWNERS = {"actions", "astral-sh", "docker", "sigstore", "SonarSource", "codecov"}
 USES_LINE = re.compile(r"^\s*-?\s*uses:\s*(?P<ref>\S+)(?P<rest>.*)$")
 
 
