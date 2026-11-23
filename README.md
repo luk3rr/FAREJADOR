@@ -8,6 +8,11 @@
   Revisor de código para pull requests do GitHub.
 </p>
 
+<p align="center">
+  <a href="https://github.com/luk3rr/FAREJADOR/actions/workflows/ci.yml"><img src="https://github.com/luk3rr/FAREJADOR/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://codecov.io/gh/luk3rr/FAREJADOR"><img src="https://codecov.io/gh/luk3rr/FAREJADOR/graph/badge.svg" alt="Cobertura de testes"></a>
+</p>
+
 O Farejador é um agente especialista em encontrar code smells, violações de boas práticas, problemas de manutenibilidade e
 provável dívida técnica nas linhas que um pull request adiciona, e publica o que encontra como
 comentários de revisão. Ele auxilia os revisores humanos: nunca aprova, nunca faz alterações, nunca faz push de código e
