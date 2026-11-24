@@ -114,7 +114,7 @@ O resumo acima, mais:
   ferramentas, passo a passo.
 - `reasoning` só vem preenchido quando o provedor do modelo o devolve.
 - `disposition` diz o que aconteceu com cada achado que o modelo devolveu: `inline` (comentário na
-  linha), `summary` (foi para o resumo da revisão, porque não pôde ser ancorado) ou `dropped` (não
+  linha), `summary` (foi para o corpo da revisão como achado geral, porque não pôde ser ancorado) ou `dropped` (não
   foi publicado: era repetido). O `reason` explica os dois últimos: `file_ignored`,
   `file_not_in_diff`, `line_not_added`, `inline_limit` e `duplicate`. Um diff de sugestão que não
   bate com o código não muda o destino do achado; ele sai com `diff_dropped` verdadeiro.
@@ -151,7 +151,7 @@ Os números que o painel mostra na visão geral, calculados no servidor sobre as
 - Revisões em andamento ou abandonadas contam como `partial`, como na lista, e ficam de fora só das médias de duração e de tokens, que olham as execuções já terminadas. `failure_rate` é `failed` dividido por `reviews` (0 quando não há revisões).
 - `by_day` traz **todos** os dias do período, inclusive os sem revisões, do mais antigo para o mais novo.
 - `median` e `mean` são `null` quando não há execuções terminadas; `p95` usa o posto mais próximo.
-- `findings` soma o destino de todos os achados do período; `findings_per_review` é o total de achados do modelo (no código, no resumo e descartados) dividido pelas revisões da linha.
+- `findings` soma o destino de todos os achados do período; `findings_per_review` é o total de achados do modelo (no código, gerais e descartados) dividido pelas revisões da linha.
 - A tabela `by_model` junta modelo e versão do prompt e vem da linha com mais revisões para a com menos.
 - `capped` é verdadeiro se o período tinha mais de 50 mil execuções e só as 50 mil primeiras entraram nas contas.
 - Os totais são os mesmos que se obtém somando a lista paginada (`/api/reviews`) do mesmo período.
