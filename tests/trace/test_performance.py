@@ -4,13 +4,19 @@
 
 """Measured limits of the trace store (NFR-1.1, NFR-1.2). Margins are wide to avoid flakiness."""
 
+import sys
 import time
 from datetime import timedelta
 from pathlib import Path
 
+import pytest
 from tests.trace.helpers import Clock, begin, make_store, one_step
 
 from farejador.trace.retention import BATCH_SIZE, purge_expired
+
+pytestmark = pytest.mark.skipif(
+    sys.platform != "linux", reason="the time budgets are measured on the Linux server"
+)
 
 
 def test_writing_a_step_takes_well_under_20_ms_on_average(tmp_path: Path) -> None:

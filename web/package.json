@@ -10,9 +10,11 @@
   "scripts": {
     "check": "tsc --noEmit -p tsconfig.json",
     "build": "node scripts/build.mjs",
-    "test": "node scripts/test.mjs"
+    "test": "node scripts/test.mjs",
+    "e2e": "node scripts/build.mjs && playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "typescript": "6.0.3"
   }
 }

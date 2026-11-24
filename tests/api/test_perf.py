@@ -7,14 +7,20 @@
 import json
 import sqlite3
 import statistics
+import sys
 import time
 import tracemalloc
 from pathlib import Path
 
+import pytest
 from tests.api_env import api_client, make_run
 from tests.trace.helpers import Clock
 
 from farejador.trace.store import TraceStore
+
+pytestmark = pytest.mark.skipif(
+    sys.platform != "linux", reason="the time budgets are measured on the Linux server"
+)
 
 
 def _bulk(tmp_path: Path, runs: int) -> Path:
