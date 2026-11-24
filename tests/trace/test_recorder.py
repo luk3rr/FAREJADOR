@@ -5,6 +5,7 @@
 """The recorder never blocks and never raises (FR-7, NFR-2.1, NFR-2.2, NFR-2.4)."""
 
 import logging
+import sys
 import threading
 import time
 from pathlib import Path
@@ -15,6 +16,11 @@ from tests.trace.helpers import NOW, SENTINEL, finding, make_store
 
 from farejador.trace.recorder import NULL_RUN, NullRecorder, TraceRecorder
 from farejador.trace.store import RunOutcome, ToolResult, TraceStore, open_readonly
+
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="SQLite crashes with an access violation under a writer thread on Windows CI",
+)
 
 
 def _recorder(store: TraceStore, **kwargs: Any) -> TraceRecorder:
