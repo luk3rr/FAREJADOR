@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from farejador.agent.schemas import OpenThread
 from farejador.review.labels import skip_reason_label
 
-PROMPT_VERSION = "2026-11-23.2"
+PROMPT_VERSION = "2026-11-24.1"
 
 _SECURITY = """\
 Regras de segurança:
@@ -39,8 +39,8 @@ _COURSE_FOCUS = """\
 Foco da disciplina (Manutenção e Evolução de Software):
 - Código limpo e clareza: funções longas ou com múltiplas responsabilidades, nomes ambíguos, \
 números/strings mágicos, código morto ou comentado e aninhamento excessivo.
-- Documentação: comentários redundantes ou desatualizados, ou ausência de explicação para \
-regras/decisões não óbvias e contratos públicos.
+- Documentação: função, classe ou módulo público novo sem docstring, comentários redundantes ou \
+desatualizados, ou ausência de explicação para regras/decisões não óbvias e contratos públicos.
 - Flexibilidade a mudanças: acoplamento forte a detalhes internos, rigidez a extensões (ex.: \
 cadeias de condicionais por tipo onde abstração/injeção caberia) e vazamento de estado.
 - Prevenção de bugs e dívida técnica: exceções engolidas ou genéricas demais, casos de borda \
