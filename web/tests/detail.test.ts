@@ -186,7 +186,7 @@ test("each finding shows where it went, why, where it is and how serious", () =>
   assert.match(textOf(card), /Achados do modelo \(3\)/);
   const text = textOf(card);
   assert.match(text, /No códigob\.py:2média · tratamento de erros/);
-  assert.match(text, /No resumoa linha não foi adicionada pelo PRb\.py:3baixa · legibilidade/);
+  assert.match(text, /Geraisa linha não foi adicionada pelo PRb\.py:3baixa · legibilidade/);
   assert.match(text, /Descartadorepetidob\.py:2/);
   const diffs = findAll(card, (e) => e.tag === "pre").map(textOf);
   assert.deepEqual(diffs, ['-value = normalize(None)\n+value = normalize(texto or "")']);

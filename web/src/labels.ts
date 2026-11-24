@@ -20,7 +20,7 @@ const CATEGORY: Readonly<Record<string, string>> = {
 };
 const DISPOSITION: Readonly<Record<string, { label: string; tone: string }>> = {
   inline: { label: "No código", tone: "ok" },
-  summary: { label: "No resumo", tone: "warn" },
+  summary: { label: "Gerais", tone: "warn" },
   dropped: { label: "Descartado", tone: "" },
 };
 const REASON: Readonly<Record<string, string>> = {

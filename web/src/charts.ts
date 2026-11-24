@@ -64,7 +64,7 @@ export interface Destination {
 
 const LABELS: Readonly<Record<Destination["key"], string>> = {
   inline: "No código",
-  summary: "No resumo",
+  summary: "Gerais",
   dropped: "Descartados",
 };
 
