@@ -20,9 +20,9 @@ nunca bloqueia um merge.
 
 ## Integrantes
 
-- Lucas Araújo
+- Lucas de Oliveira Araújo
 
-Trabalho prático de Teste de Software. O sistema está no ar em https://farejador.luk3rr.com
+Trabalho prático de [Teste de Software](https://github.com/andrehora/tp-software-testing/blob/main/README.md). O sistema está no ar em https://farejador.luk3rr.com
 (painel público e somente leitura) e a cobertura de testes está em
 [codecov.io/gh/luk3rr/FAREJADOR](https://codecov.io/gh/luk3rr/FAREJADOR).
 
@@ -55,17 +55,13 @@ A API de leitura que alimenta o painel está descrita em [docs/api.md](docs/api.
 
 ## Uso de IA
 
-O projeto foi construído com o **Claude Code** (Anthropic), seguindo o fluxo **AI-DLC** (Inception,
-Construction e Operations), cujos artefatos estão em [`.aidlc/`](.aidlc/): requisitos, design,
+O projeto foi construído com o **Claude Code** (Anthropic), seguindo a metodologia **[AI-DLC](https://aws.amazon.com/blogs/devops/ai-driven-development-life-cycle/)**, cujos artefatos estão em [`.aidlc/`](.aidlc/): requisitos, design,
 tarefas e o registro de decisões de cada etapa.
 
-- **O que a IA fez:** propôs requisitos e design, escreveu o código, os testes, a configuração de CI e a
-  documentação, e executou as verificações (testes, lint, tipos) antes de cada entrega.
-- **O que ficou comigo:** definir o problema e o escopo, responder às perguntas de cada etapa,
-  aprovar cada entrega, criar as contas e credenciais (GitHub App, Cloudflare, AWS, Codecov),
+- **O que a IA fez:** escreveu o código, os testes, a configuração de CI e a documentação, e executou as verificações (testes, lint, tipos) antes de cada entrega.
+- **O que ficou com o humano:** definir o problema, requisitos e o escopo, responder às perguntas de cada etapa,
+  aprovar cada entrega, criar as contas e credenciais (GitHub App, Cloudflare, AWS, Codecov), revisar o código,
   autorizar cada commit, push e publicação, e validar o sistema com pull requests reais.
-- **No produto:** o próprio Farejador usa um modelo de linguagem (via OpenRouter) para revisar o
-  código. Ele só tem ferramentas de leitura e nunca altera o repositório revisado.
 
 ## Execução dos testes
 
@@ -109,7 +105,7 @@ flowchart LR
   rascunho é marcado como pronto para revisão, o Farejador publica uma revisão: comentários
   inline nas linhas adicionadas mais um resumo.
 - **Interações seguintes (sob demanda).** Novos pushes **não** disparam nada. Quem tem permissão de
-  escrita menciona `@farejador` em um comentário do pull request. Com threads abertos, o Farejador
+  escrita menciona `@farejadorr` em um comentário do pull request. Com threads abertos, o Farejador
   só confere se cada um foi corrigido no código atual e resolve os que foram, **sem procurar
   problemas novos**. Se todos forem resolvidos, comenta `LGTM 👍🐶`; se sobrarem, responde com um status
   curto. Sem threads abertos (por exemplo, para pedir mais depois do LGTM), uma menção faz uma nova
@@ -152,7 +148,7 @@ Copie `.env.example` para `.env` e preencha. Nunca versione o `.env` nem o arqui
 | `FAREJADOR_WEBHOOK_SECRET` | modos webhook | | O segredo do webhook configurado no App |
 | `FAREJADOR_OPENROUTER_API_KEY` | sim | | Sua chave da OpenRouter |
 | `FAREJADOR_MODEL` | sim | | Id do modelo na OpenRouter (precisa suportar tool calling) |
-| `FAREJADOR_TRIGGER_TEXT` | não | `@` + o nome do seu App | Texto que aciona um comando em um comentário. Sem valor, o Farejador usa a menção do próprio App (por exemplo `@farejadorr`) |
+| `FAREJADOR_TRIGGER_TEXT` | não | `@` + o nome do seu App | Texto que aciona um comando em um comentário. Sem valor, o Farejador usa a menção do próprio App (por exemplo `@farejadorrr`) |
 | `FAREJADOR_BOT_LOGIN` | não | derivado | Login do bot, normalmente `<slug-do-app>[bot]` |
 | `FAREJADOR_POLL_INTERVAL_S` | não | `60` | Segundos entre as consultas |
 | `FAREJADOR_WORKERS` | não | `2` | Revisões em paralelo |
@@ -219,13 +215,13 @@ No modo `webhook` o serviço também serve um painel público e somente leitura 
 1. Abra um pull request (fora de rascunho) em um repositório onde o App está instalado. A revisão
    aparece em até um intervalo de polling, ou na hora no modo webhook.
 2. Corrija o que concordar e faça push. Nada acontece sozinho.
-3. Comente `@farejador` no pull request (é preciso ter permissão de escrita). Os threads corrigidos
+3. Comente `@farejadorr` no pull request (é preciso ter permissão de escrita). Os threads corrigidos
    são resolvidos e, se todos forem, você recebe `LGTM 👍🐶` (sem nova revisão do código); caso
    contrário, um comentário de status lista o que ainda está pendente. Resolva você mesmo os threads
    de que discordar e mencione de novo. Para uma nova revisão completa depois do LGTM, mencione de
    novo: sem threads abertos, o Farejador revisa o head atual.
 4. Se uma revisão falhar (por exemplo, erro do modelo), você recebe um único aviso curto. Mencione
-   `@farejador` para tentar outra vez.
+   `@farejadorr` para tentar outra vez.
 
 ### O que cada comentário contém
 
