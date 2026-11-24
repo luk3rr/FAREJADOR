@@ -102,7 +102,7 @@ function field(label: string, control: VElement): VElement {
 function destination(item: ReviewSummary): VElement {
   return h(
     "span",
-    { class: "mono", title: "no código · no resumo · descartados" },
+    { class: "mono", title: "no código · gerais · descartados" },
     h("span", { class: "inline" }, String(item.findings_inline)),
     " · ",
     h("span", { class: "summary" }, String(item.findings_summary)),
@@ -150,7 +150,7 @@ function table(items: readonly ReviewSummary[], nextCursor: string | null, more:
           h("th", { scope: "col", class: "num" }, "Passos"),
           h("th", { scope: "col", class: "num" }, "Tokens"),
           h("th", { scope: "col", class: "num" }, "Duração"),
-          h("th", { scope: "col", title: "no código · no resumo · descartados" }, "Achados"),
+          h("th", { scope: "col", title: "no código · gerais · descartados" }, "Achados"),
           h("th", { scope: "col" }, "Quando"),
         ),
       ),

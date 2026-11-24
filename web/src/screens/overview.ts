@@ -125,7 +125,7 @@ function dataView(data: StatsOut): VElement[] {
       "div",
       { class: "two" },
       h("div", { class: "card" }, h("h2", {}, "Revisões por dia"), barChart(data.by_day), h("p", { class: "hint" }, "Dias em UTC; cada barra são as revisões iniciadas naquele dia.")),
-      h("div", { class: "card stack" }, h("h2", {}, "Para onde vão os achados"), destinationBar(data.findings), h("p", { class: "hint" }, "“No resumo”: o achado não pôde ser ancorado numa linha adicionada. “Descartados”: repetidos.")),
+      h("div", { class: "card stack" }, h("h2", {}, "Para onde vão os achados"), destinationBar(data.findings), h("p", { class: "hint" }, "“Gerais”: o achado não pôde ser ancorado numa linha adicionada e vai no corpo da revisão. “Descartados”: repetidos.")),
     ),
     data.by_model.length > 0 ? modelTable(data) : null,
   ].filter((node): node is VElement => node !== null);

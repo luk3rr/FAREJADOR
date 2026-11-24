@@ -59,7 +59,7 @@ test("the chart is accepted by the safe renderer, so it uses no forbidden attrib
 
 test("the destination shares add up to 100%", () => {
   const parts = destinations({ inline: 62, summary: 31, dropped: 7 });
-  assert.deepEqual(parts.map((p) => p.label), ["No código", "No resumo", "Descartados"]);
+  assert.deepEqual(parts.map((p) => p.label), ["No código", "Gerais", "Descartados"]);
   assert.ok(Math.abs(parts.reduce((sum, p) => sum + p.share, 0) - 1) < 1e-9);
   assert.equal(parts[0]?.share, 0.62);
 });
