@@ -12,8 +12,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 WEB = ROOT / "web"
-PACKAGE = json.loads((WEB / "package.json").read_text())
-LOCK = json.loads((WEB / "package-lock.json").read_text())
+PACKAGE = json.loads((WEB / "package.json").read_text(encoding="utf-8"))
+LOCK = json.loads((WEB / "package-lock.json").read_text(encoding="utf-8"))
 EXACT_VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 
 
@@ -57,14 +57,16 @@ def test_the_lockfile_holds_exactly_one_package_with_integrity_and_no_install_sc
 
 def test_npm_never_runs_package_scripts_in_this_project() -> None:
     npmrc = dict(
-        line.split("=", 1) for line in (WEB / ".npmrc").read_text().splitlines() if "=" in line
+        line.split("=", 1)
+        for line in (WEB / ".npmrc").read_text(encoding="utf-8").splitlines()
+        if "=" in line
     )
     assert npmrc["ignore-scripts"] == "true"
     assert npmrc["save-exact"] == "true"
 
 
 def test_the_node_version_is_pinned_to_an_exact_release() -> None:
-    assert EXACT_VERSION.fullmatch((WEB / ".nvmrc").read_text().strip())
+    assert EXACT_VERSION.fullmatch((WEB / ".nvmrc").read_text(encoding="utf-8").strip())
     assert PACKAGE["engines"]["node"].startswith(">=")
 
 
@@ -81,23 +83,23 @@ def test_the_node_version_is_pinned_to_an_exact_release() -> None:
     ],
 )
 def test_the_compiler_runs_in_strict_mode(flag: str) -> None:
-    options = json.loads((WEB / "tsconfig.json").read_text())["compilerOptions"]
+    options = json.loads((WEB / "tsconfig.json").read_text(encoding="utf-8"))["compilerOptions"]
     assert options[flag] is True
     assert options["types"] == []  # no ambient packages sneak in
     assert options["skipLibCheck"] is False
 
 
 def test_the_tests_compile_with_the_same_strict_options() -> None:
-    config = json.loads((WEB / "tsconfig.test.json").read_text())
+    config = json.loads((WEB / "tsconfig.test.json").read_text(encoding="utf-8"))
     assert config["extends"] == "./tsconfig.json"
     assert "strict" not in config.get("compilerOptions", {})  # nothing is loosened
 
 
 def test_the_build_output_and_node_modules_are_ignored_by_git_and_docker() -> None:
-    gitignore = (ROOT / ".gitignore").read_text()
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
     for entry in ("web/node_modules/", "web/.test-build/", "src/farejador/web/static/"):
         assert entry in gitignore, entry
-    dockerignore = (ROOT / ".dockerignore").read_text().splitlines()
+    dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     for entry in ("web/node_modules", "web/.test-build", "src/farejador/web/static"):
         assert entry in dockerignore, entry
 

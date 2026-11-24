@@ -2,6 +2,7 @@
 # Created on: November 20, 2026
 # Author: Lucas Araújo <araujolucas@dcc.ufmg.br>
 
+import sys
 import urllib.error
 from pathlib import Path
 from typing import Any
@@ -59,6 +60,9 @@ def test_check_config_reports_the_missing_variable_by_name_only(
     assert "sk-or" not in err
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="asyncio signal handlers are not available on Windows"
+)
 def test_the_mode_flag_overrides_the_environment_and_is_validated(
     farejador_env: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -78,6 +82,9 @@ def test_the_mode_flag_overrides_the_environment_and_is_validated(
     assert "FAREJADOR_WEBHOOK_SECRET is required" in capsys.readouterr().err
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="asyncio signal handlers are not available on Windows"
+)
 def test_run_builds_the_runtime_and_runs_it(farejador_env: Path) -> None:
     runtime = FakeRuntime()
     seen: list[Settings] = []

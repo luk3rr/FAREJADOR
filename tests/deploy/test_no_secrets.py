@@ -47,7 +47,7 @@ def test_no_file_in_the_repository_contains_a_secret_shaped_value() -> None:
         if name.startswith((".aidlc/", "uv.lock")) or is_fake_fixture:
             continue
         try:
-            text = (ROOT / name).read_text()
+            text = (ROOT / name).read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
         for label, pattern in SECRET_PATTERNS.items():
@@ -57,8 +57,8 @@ def test_no_file_in_the_repository_contains_a_secret_shaped_value() -> None:
 
 
 def test_secret_files_are_ignored_by_git_and_the_docker_build_context() -> None:
-    gitignore = (ROOT / ".gitignore").read_text()
-    dockerignore = (ROOT / ".dockerignore").read_text()
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
     for ignored in (".env", "*.pem"):
         assert ignored in gitignore, ignored
     for ignored in (".env", "*.pem", "secrets"):

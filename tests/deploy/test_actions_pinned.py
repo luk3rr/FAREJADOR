@@ -16,7 +16,7 @@ USES_LINE = re.compile(r"^\s*-?\s*uses:\s*(?P<ref>\S+)(?P<rest>.*)$")
 def _uses_lines() -> list[tuple[str, str, str]]:
     found = []
     for path in all_workflow_files():
-        for line in path.read_text().splitlines():
+        for line in path.read_text(encoding="utf-8").splitlines():
             match = USES_LINE.match(line)
             if match:
                 found.append((path.name, match["ref"], match["rest"]))
@@ -51,19 +51,19 @@ def test_the_same_action_is_pinned_to_the_same_sha_everywhere() -> None:
 
 def test_no_workflow_uses_the_dangerous_triggers() -> None:
     for path in all_workflow_files():
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         assert "pull_request_target" not in text, path.name
         assert "workflow_run" not in text, path.name
 
 
 def test_every_workflow_limits_the_default_token_permissions() -> None:
     for path in all_workflow_files():
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         assert re.search(r"^permissions:", text, re.M), f"{path.name} has no top-level permissions"
 
 
 def test_the_image_installs_only_from_the_lockfile_and_points_to_the_repository() -> None:
-    dockerfile = (ROOT / "Dockerfile").read_text()
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "uv sync --frozen --no-dev --no-install-project" in dockerfile
     assert "uv sync --frozen --no-dev --no-editable" in dockerfile
     assert 'org.opencontainers.image.source="https://github.com/luk3rr/FAREJADOR"' in dockerfile
@@ -71,6 +71,6 @@ def test_the_image_installs_only_from_the_lockfile_and_points_to_the_repository(
 
 
 def test_the_image_exposes_its_release_version_to_the_application() -> None:
-    dockerfile = (ROOT / "Dockerfile").read_text()
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "ARG APP_VERSION=dev" in dockerfile
     assert "FAREJADOR_APP_VERSION=${APP_VERSION}" in dockerfile

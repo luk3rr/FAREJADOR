@@ -38,7 +38,7 @@ def make_repo(path: Path, files: dict[str, str | bytes]) -> str:
         if isinstance(content, bytes):
             target.write_bytes(content)
         else:
-            target.write_text(content)
+            target.write_bytes(content.encode())
     git(path, "add", "-A")
     git(path, "commit", "-q", "-m", "initial")
     return git(path, "rev-parse", "HEAD")

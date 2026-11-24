@@ -14,7 +14,7 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 
 
 def load(name: str) -> dict[str, Any]:
-    loaded: dict[str, Any] = yaml.safe_load((WORKFLOWS / name).read_text())
+    loaded: dict[str, Any] = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
     return loaded
 
 

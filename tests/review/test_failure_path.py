@@ -3,6 +3,7 @@
 # Author: Lucas Araújo <araujolucas@dcc.ufmg.br>
 
 import json
+import sys
 from pathlib import Path
 
 import httpx
@@ -80,6 +81,7 @@ async def test_a_github_failure_while_reading_the_diff_is_recorded_as_github(
     assert env.comment_route.call_count == 1
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot delete read-only git objects")
 async def test_a_workspace_failure_is_internal(
     tmp_path: Path, respx_mock: respx.MockRouter
 ) -> None:

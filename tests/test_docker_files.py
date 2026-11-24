@@ -5,6 +5,7 @@
 """Static checks of the packaging files: Docker is not required to run them (design A38)."""
 
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def _compose() -> dict[str, Any]:
-    loaded: dict[str, Any] = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
+    loaded: dict[str, Any] = yaml.safe_load(
+        (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    )
     return loaded
 
 
@@ -55,7 +58,7 @@ def test_state_lives_in_a_named_volume_and_the_key_is_mounted_read_only(name: st
 
 
 def test_secrets_come_from_an_env_file_not_from_the_compose_file() -> None:
-    text = (ROOT / "docker-compose.yml").read_text()
+    text = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     assert "env_file: ${FAREJADOR_ENV_FILE:-.env}" in text
     for secret_variable in ("OPENROUTER_API_KEY", "WEBHOOK_SECRET"):
         assert secret_variable not in text
@@ -68,7 +71,7 @@ def test_only_the_webhook_service_has_a_healthcheck() -> None:
 
 
 def test_the_dockerfile_builds_in_two_stages_and_runs_as_non_root() -> None:
-    text = (ROOT / "Dockerfile").read_text()
+    text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert len(re.findall(r"^FROM python:3\.13-slim", text, re.M)) == 2
     assert "AS build" in text
     assert "AS web" in text
@@ -86,7 +89,9 @@ def test_the_dockerfile_builds_in_two_stages_and_runs_as_non_root() -> None:
 
 
 def test_the_dockerfile_never_copies_secrets_or_local_state() -> None:
-    copies = re.findall(r"^COPY (?!--from).*$", (ROOT / "Dockerfile").read_text(), re.M)
+    copies = re.findall(
+        r"^COPY (?!--from).*$", (ROOT / "Dockerfile").read_text(encoding="utf-8"), re.M
+    )
     assert copies == [
         "COPY web/package.json web/package-lock.json web/.npmrc ./",
         "COPY web/ ./",
@@ -98,7 +103,7 @@ def test_the_dockerfile_never_copies_secrets_or_local_state() -> None:
 def test_dockerignore_keeps_secrets_and_noise_out_of_the_build_context() -> None:
     entries = {
         line.strip()
-        for line in (ROOT / ".dockerignore").read_text().splitlines()
+        for line in (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.startswith("#")
     }
     for expected in (".git", ".aidlc", ".venv", "secrets", ".env", "*.pem", "*.key", "tests"):
@@ -107,7 +112,7 @@ def test_dockerignore_keeps_secrets_and_noise_out_of_the_build_context() -> None
 
 
 def test_the_env_example_documents_every_setting() -> None:
-    text = (ROOT / ".env.example").read_text()
+    text = (ROOT / ".env.example").read_text(encoding="utf-8")
     documented = set(re.findall(rf"^#?\s*({ENV_PREFIX}[A-Z0-9_]+)=", text, re.M))
     expected = {f"{ENV_PREFIX}{name.upper()}" for name in Settings.model_fields}
     assert expected <= documented
@@ -118,15 +123,16 @@ def test_the_env_example_documents_every_setting() -> None:
 
 
 def test_local_secrets_are_git_ignored() -> None:
-    ignored = (ROOT / ".gitignore").read_text()
+    ignored = (ROOT / ".gitignore").read_text(encoding="utf-8")
     for pattern in ("secrets/", ".env", "*.pem", "/data/"):
         assert pattern in ignored
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no executable bit")
 def test_the_smoke_script_is_executable_and_has_the_standard_header() -> None:
     script = ROOT / "scripts" / "smoke_compose.sh"
     assert script.stat().st_mode & 0o111
-    lines = script.read_text().splitlines()
+    lines = script.read_text(encoding="utf-8").splitlines()
     assert lines[0] == "#!/usr/bin/env bash"
     assert lines[1] == "# Filename: smoke_compose.sh"
     assert lines[3] == "# Author: Lucas Araújo <araujolucas@dcc.ufmg.br>"
@@ -134,17 +140,17 @@ def test_the_smoke_script_is_executable_and_has_the_standard_header() -> None:
 
 
 def test_the_readme_documents_the_variables_the_settings_define() -> None:
-    readme = (ROOT / "README.md").read_text()
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
     for name in Settings.model_fields:
         assert f"FAREJADOR_{name.upper()}" in readme, name
 
 
 def test_the_dashboard_is_built_in_a_pinned_node_stage_that_never_reaches_the_runtime() -> None:
-    text = (ROOT / "Dockerfile").read_text()
+    text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     stages = re.split(r"^(?=FROM )", text, flags=re.M)
     web = next(stage for stage in stages if " AS web" in stage.splitlines()[0])
     assert re.match(r"FROM node:\d+\.\d+\.\d+-slim@sha256:[0-9a-f]{64} AS web", web)
-    node_version = (ROOT / "web" / ".nvmrc").read_text().strip()
+    node_version = (ROOT / "web" / ".nvmrc").read_text(encoding="utf-8").strip()
     assert f"node:{node_version}-slim@" in web, "the image must match .nvmrc"
     assert "npm ci --ignore-scripts" in web
     assert web.index("COPY web/package.json") < web.index("npm ci") < web.index("COPY web/ ./")

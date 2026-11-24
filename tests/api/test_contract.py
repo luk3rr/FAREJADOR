@@ -85,7 +85,7 @@ def test_the_design_document_names_the_same_summary_fields() -> None:
     """The contract is written in 2.8; keep the document and the code from drifting apart."""
     if not DESIGN.exists():
         return  # the design folder is kept local, not in git
-    text = DESIGN.read_text()
+    text = DESIGN.read_text(encoding="utf-8")
     block = text.split("// GET /api/reviews\n", 1)[1].split("```", 1)[0]
     documented = set(re.findall(r'"([a-z_]+)":', block))
     assert (SUMMARY - {"steps"}) <= documented | {"next_cursor", "items"}
