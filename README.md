@@ -18,6 +18,78 @@ provável dívida técnica nas linhas que um pull request adiciona, e publica o 
 comentários de revisão. Ele auxilia os revisores humanos: nunca aprova, nunca faz alterações, nunca faz push de código e
 nunca bloqueia um merge.
 
+## Integrantes
+
+- Lucas Araújo
+
+Trabalho prático de Teste de Software. O sistema está no ar em https://farejador.luk3rr.com
+(painel público e somente leitura) e a cobertura de testes está em
+[codecov.io/gh/luk3rr/FAREJADOR](https://codecov.io/gh/luk3rr/FAREJADOR).
+
+## Sobre o sistema
+
+O Farejador revisa pull requests do GitHub: lê o diff, explora o repositório com ferramentas de
+leitura e publica comentários de revisão sobre manutenibilidade, boas práticas e provável dívida
+técnica. Cada revisão deixa um registro (o que o modelo viu, as ferramentas que chamou e o que
+decidiu), que o **painel web** exibe:
+
+- **Visão geral:** revisões por dia, taxa de falha, duração, tokens e para onde vão os achados.
+- **Revisões:** lista com filtros (repositório, PR, resultado e período) e paginação.
+- **Detalhe de uma revisão:** achados, orçamento usado e a linha do tempo do raciocínio do modelo.
+- **Tema** claro e escuro. O painel só mostra revisões de repositórios públicos.
+
+A API de leitura que alimenta o painel está descrita em [docs/api.md](docs/api.md) e o painel em
+[docs/painel.md](docs/painel.md).
+
+## Tecnologias
+
+- **Backend:** Python 3.12, FastAPI, Uvicorn, httpx, Pydantic, SQLite e o SDK da OpenAI falando com
+  o OpenRouter.
+- **Painel:** TypeScript compilado com `tsc`, sem framework e sem dependências em tempo de execução.
+- **Testes:** pytest (com pytest-cov), o executor de testes do Node e Playwright para os testes
+  end-to-end.
+- **Qualidade:** Ruff, mypy em modo estrito e SonarCloud.
+- **CI/CD:** GitHub Actions (Linux, macOS e Windows), Codecov, imagem Docker assinada com cosign no
+  GHCR e atualização por pull no servidor.
+- **Produção:** AWS Lightsail atrás de um Cloudflare Tunnel, sem portas de entrada abertas.
+
+## Uso de IA
+
+O projeto foi construído com o **Claude Code** (Anthropic), seguindo o fluxo **AI-DLC** (Inception,
+Construction e Operations), cujos artefatos estão em [`.aidlc/`](.aidlc/): requisitos, design,
+tarefas e o registro de decisões de cada etapa.
+
+- **O que a IA fez:** propôs requisitos e design, escreveu o código, os testes, a configuração de CI e a
+  documentação, e executou as verificações (testes, lint, tipos) antes de cada entrega.
+- **O que ficou comigo:** definir o problema e o escopo, responder às perguntas de cada etapa,
+  aprovar cada entrega, criar as contas e credenciais (GitHub App, Cloudflare, AWS, Codecov),
+  autorizar cada commit, push e publicação, e validar o sistema com pull requests reais.
+- **No produto:** o próprio Farejador usa um modelo de linguagem (via OpenRouter) para revisar o
+  código. Ele só tem ferramentas de leitura e nunca altera o repositório revisado.
+
+## Execução dos testes
+
+Pré-requisitos: [uv](https://docs.astral.sh/uv/) e Node 22.
+
+```bash
+# Testes de unidade e de integração do backend, com cobertura (mínimo de 80%)
+uv sync
+uv run pytest --cov=farejador --cov-fail-under=80
+
+# Testes de unidade do painel
+npm --prefix web ci --ignore-scripts
+npm --prefix web test
+
+# Testes end-to-end (Playwright, no navegador)
+npx --prefix web playwright install chromium
+npm --prefix web run e2e
+```
+
+São mais de 1.200 testes no backend, 155 no painel e 5 end-to-end. O CI roda tudo isso a cada
+commit na `main` e em cada pull request. Fora do Linux, alguns testes são pulados de propósito:
+os que executam os scripts do servidor, usam grupos de processos POSIX ou medem orçamentos de
+tempo no servidor Linux.
+
 ## Como funciona
 
 ```mermaid
