@@ -17,9 +17,10 @@ LOCK = json.loads((WEB / "package-lock.json").read_text(encoding="utf-8"))
 EXACT_VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 
 
-def test_the_only_dependency_is_typescript_at_an_exact_version_and_only_for_development() -> None:
-    assert PACKAGE["devDependencies"].keys() == {"typescript"}
-    assert EXACT_VERSION.fullmatch(PACKAGE["devDependencies"]["typescript"])
+def test_the_only_dependencies_are_typescript_and_playwright_at_exact_versions() -> None:
+    assert PACKAGE["devDependencies"].keys() == {"typescript", "@playwright/test"}
+    for version in PACKAGE["devDependencies"].values():
+        assert EXACT_VERSION.fullmatch(version)
     for kind in ("dependencies", "optionalDependencies", "peerDependencies", "bundledDependencies"):
         assert kind not in PACKAGE, kind
 
@@ -31,10 +32,11 @@ def test_the_package_is_private_and_uses_es_modules() -> None:
 
 
 def test_the_scripts_are_the_ones_the_design_and_the_verification_command_use() -> None:
-    assert set(PACKAGE["scripts"]) == {"check", "build", "test"}
+    assert set(PACKAGE["scripts"]) == {"check", "build", "test", "e2e"}
     assert PACKAGE["scripts"]["check"].startswith("tsc --noEmit")
     for name, command in PACKAGE["scripts"].items():
         assert not re.search(r"\b(curl|wget|npx|sudo)\b|\|\s*(ba)?sh", command), name
+    assert PACKAGE["scripts"]["e2e"] == "node scripts/build.mjs && playwright test"
 
 
 def test_no_lifecycle_script_runs_on_install() -> None:
@@ -42,16 +44,25 @@ def test_no_lifecycle_script_runs_on_install() -> None:
         assert hook not in PACKAGE.get("scripts", {}), hook
 
 
-def test_the_lockfile_holds_exactly_one_package_with_integrity_and_no_install_script() -> None:
+def test_the_lockfile_holds_only_the_dev_packages_with_integrity_and_no_install_script() -> None:
     assert LOCK["lockfileVersion"] >= 3
     packages = LOCK["packages"]
-    assert set(packages) == {"", "node_modules/typescript"}
-    typescript = packages["node_modules/typescript"]
-    assert typescript["version"] == PACKAGE["devDependencies"]["typescript"]
-    assert typescript["integrity"].startswith("sha512-")
-    assert typescript["resolved"].startswith("https://registry.npmjs.org/")
-    assert "hasInstallScript" not in typescript
-    assert "dependencies" not in typescript and "optionalDependencies" not in typescript
+    assert set(packages) == {
+        "",
+        "node_modules/typescript",
+        "node_modules/@playwright/test",
+        "node_modules/playwright",
+        "node_modules/playwright-core",
+    }
+    for name, package in packages.items():
+        if name == "":
+            continue
+        assert package["integrity"].startswith("sha512-"), name
+        assert package["resolved"].startswith("https://registry.npmjs.org/"), name
+        assert package["dev"] is True, name
+        assert "hasInstallScript" not in package, name
+    for name in ("typescript", "@playwright/test"):
+        assert packages[f"node_modules/{name}"]["version"] == PACKAGE["devDependencies"][name]
     assert packages[""]["devDependencies"] == PACKAGE["devDependencies"]
 
 
@@ -97,7 +108,12 @@ def test_the_tests_compile_with_the_same_strict_options() -> None:
 
 def test_the_build_output_and_node_modules_are_ignored_by_git_and_docker() -> None:
     gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
-    for entry in ("web/node_modules/", "web/.test-build/", "src/farejador/web/static/"):
+    for entry in (
+        "web/node_modules/",
+        "web/.test-build/",
+        "web/test-results/",
+        "src/farejador/web/static/",
+    ):
         assert entry in gitignore, entry
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     for entry in ("web/node_modules", "web/.test-build", "src/farejador/web/static"):

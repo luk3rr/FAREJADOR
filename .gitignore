@@ -55,3 +55,7 @@ src/farejador/web/static/
 
 # Local architecture notes
 docs/arquitetura.md
+
+# Playwright
+web/test-results/
+web/playwright-report/
